@@ -63,40 +63,84 @@ const Upload = ({ onUploadSuccess, onClose }) => {
         }
       }
 
-      // Final check for Cloudinary's 10MB limit (videos can be larger on some plans, but we'll stick to 10MB for free tier safety)
-      if (fileToUpload.size > 10 * 1024 * 1024) {
-        throw new Error('File is too large. Maximum is 10MB.');
+      // Check limits: 10MB for images, 100MB for videos
+      const limit = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (fileToUpload.size > limit) {
+        throw new Error(`File is too large. Maximum is ${isVideo ? '100MB' : '10MB'}.`);
       }
 
       setStatus('uploading');
-      // 2. Upload to Cloudinary
-      const formData = new FormData();
-      formData.append('file', fileToUpload);
-      formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default');
-
+      
       const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
+      
       if (!cloudName) throw new Error('Cloudinary Cloud Name missing');
 
-      const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
+      let uploadResult;
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error?.message || 'Cloudinary upload failed');
+      // CHUNKED UPLOAD LOGIC for large videos (> 5MB)
+      if (isVideo && fileToUpload.size > 5 * 1024 * 1024) {
+        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+        const totalChunks = Math.ceil(fileToUpload.size / chunkSize);
+        const uniqueUploadId = `id_${Date.now()}`;
+        
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, fileToUpload.size);
+          const chunk = fileToUpload.slice(start, end);
+          
+          const formData = new FormData();
+          formData.append('file', chunk);
+          formData.append('upload_preset', uploadPreset);
+          formData.append('timestamp', (Date.now() / 1000) | 0);
+
+          const res = await fetch(
+            `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
+            {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'X-Unique-Upload-Id': uniqueUploadId,
+                'Content-Range': `bytes ${start}-${end - 1}/${fileToUpload.size}`
+              }
+            }
+          );
+
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error?.message || `Chunk ${i+1} failed`);
+          }
+          
+          if (i === totalChunks - 1) {
+            uploadResult = await res.json();
+          }
+        }
+      } else {
+        // STANDARD UPLOAD for images and small videos
+        const formData = new FormData();
+        formData.append('file', fileToUpload);
+        formData.append('upload_preset', uploadPreset);
+
+        const res = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
+          {
+            method: 'POST',
+            body: formData,
+          }
+        );
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error?.message || 'Upload failed');
+        }
+        uploadResult = await res.json();
       }
 
-      const { secure_url } = await res.json();
-
-      // 2. Save to Supabase
+      const imageUrl = uploadResult.secure_url;
       const { data: { user } } = await supabase.auth.getUser();
       const { error: dbError } = await supabase.from('memories').insert([
         {
-          image_url: secure_url,
+          image_url: imageUrl,
           caption: caption,
           uploaded_by: user?.id,
           friend_name: friendName
@@ -160,8 +204,7 @@ const Upload = ({ onUploadSuccess, onClose }) => {
           <form onSubmit={handleUpload} className="space-y-6">
             <div
               onClick={() => fileInputRef.current?.click()}
-              className={`relative aspect-video rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex items-center justify-center group ${preview ? 'border-primary/50' : 'border-white/5 hover:border-primary/30 hover:bg-white/5'
-                }`}
+              className={`relative aspect-video rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex items-center justify-center group ${preview ? 'border-primary/50' : 'border-white/5 hover:border-primary/30 hover:bg-white/5'}`}
             >
               {preview ? (
                 <>
