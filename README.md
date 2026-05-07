@@ -13,13 +13,19 @@ A premium, mobile-first social collective for close friend groups (The Syndicate
   - Dynamic "Bento-style" masonry grid for a premium aesthetic.
   - **Swipeable Lightbox**: Full-screen immersive view with swipe gestures and pagination.
 - **Tweet Wall**: A text-based broadcast station for thoughts and messages.
+- **Decommission Protocol**: Integrated delete functionality for users to manage their own content.
 - **System (Profile)**: 
   - Personal stats (Upload count, Message count).
   - Manage your own archive.
   - Secure session deactivation.
 - **Advanced Media Pipeline**:
   - **Client-Side Compression**: High-res photos are automatically optimized before upload to stay under 10MB while maintaining sharp quality.
-  - **Cloudinary Integration**: Blazing fast media delivery.
+
+## Security Architecture
+
+- **Restricted Access**: Public registration is disabled. Only authorized personnel added via Supabase can authenticate.
+- **Single-Factor Login**: Secure email-only authentication protocol.
+- **Ownership Validation**: Row Level Security (RLS) ensures agents can only modify or delete their own data.
 
 ## Tech Stack
 
@@ -85,18 +91,15 @@ CREATE POLICY "Public Read Quotes" ON quotes FOR SELECT USING (true);
 -- Allow authenticated inserts
 CREATE POLICY "Auth Insert Memories" ON memories FOR INSERT WITH CHECK (auth.uid() = uploaded_by);
 CREATE POLICY "Auth Insert Messages" ON messages FOR INSERT WITH CHECK (auth.uid() = uploaded_by);
+
+-- Allow authenticated deletions
+CREATE POLICY "Auth Delete Own Memories" ON memories FOR DELETE USING (auth.uid() = uploaded_by);
+CREATE POLICY "Auth Delete Own Messages" ON messages FOR DELETE USING (auth.uid() = uploaded_by);
 ```
-
-## Project Structure
-
-- `/frontend`: React application source code.
-- `/frontend/src/components`: UI components (Auth, Upload).
-- `/frontend/src/lib`: Core library initializations (Supabase).
-- `/backend`: (Optional) Schema definitions and SQL migrations.
 
 ## The Syndicate Protocol
 
-1. **Authentication**: Use Email or GitHub to enter the network.
-2. **Identity**: Set your "Agent Name" during your first upload.
-3. **Archive**: Photos are permanent records of the collective.
-4. **Broadcast**: The Wall is for thoughts that don't need a photo.
+1. **Onboarding**: Users must be manually invited/added via Supabase Auth.
+2. **Identity**: Your Agent Name is established during your first upload.
+3. **Decommissioning**: Use the trash icon on your own content to erase records from the wall.
+4. **Maintenance**: Compression is handled automatically; no manual optimization required.

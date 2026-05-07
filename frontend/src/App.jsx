@@ -8,7 +8,8 @@ import {
   Clock, 
   Menu,
   Activity,
-  User
+  User,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Auth from './components/Auth';
@@ -107,6 +108,22 @@ const App = () => {
     }
   };
 
+  const handleDeleteMemory = async (id) => {
+    const { error } = await supabase.from('memories').delete().eq('id', id);
+    if (!error) {
+      fetchMemories();
+      showToast('Memory decommissioned.');
+    }
+  };
+
+  const handleDeleteMessage = async (id) => {
+    const { error } = await supabase.from('messages').delete().eq('id', id);
+    if (!error) {
+      fetchMessages();
+      showToast('Transmission erased.');
+    }
+  };
+
   const renderHome = () => (
     <div className="space-y-8 pb-24">
       {quote && (
@@ -168,11 +185,23 @@ const App = () => {
                 <motion.div 
                   key={item.id}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setSelectedImageIndex(memories.findIndex(m => m.id === item.id))}
                   className={`relative rounded-2xl overflow-hidden bg-bg-surface border border-white/5 ${idx % 3 === 0 ? 'col-span-2 aspect-video' : 'aspect-square'}`}
                 >
-                  <img src={item.image_url} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/20" />
+                  <img 
+                    src={item.image_url} 
+                    className="w-full h-full object-cover" 
+                    onClick={() => setSelectedImageIndex(memories.findIndex(m => m.id === item.id))}
+                  />
+                  <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+                  
+                  {item.uploaded_by === session?.user?.id && (
+                    <button 
+                      onClick={() => handleDeleteMemory(item.id)}
+                      className="absolute top-3 right-3 p-2 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded-xl backdrop-blur-md transition-all border border-red-500/20"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </motion.div>
               ))}
             </div>
@@ -212,13 +241,21 @@ const App = () => {
             className="p-5 bg-bg-surface/50 border border-white/5 rounded-3xl flex gap-4"
           >
             <Avatar size={40} name={msg.friend_name} variant="beam" />
-            <div className="space-y-1">
+            <div className="space-y-1 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-black text-xs uppercase text-primary">{msg.friend_name}</span>
                 <span className="text-[9px] text-white/20">• {formatDistanceToNow(new Date(msg.created_at))} ago</span>
               </div>
               <p className="text-sm text-white/80 leading-relaxed">{msg.text}</p>
             </div>
+            {msg.uploaded_by === session?.user?.id && (
+              <button 
+                onClick={() => handleDeleteMessage(msg.id)}
+                className="self-start p-2 text-white/10 hover:text-red-500 transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
           </motion.div>
         ))}
       </div>
