@@ -44,24 +44,28 @@ const Upload = ({ onUploadSuccess, onClose }) => {
     setError(null);
 
     try {
-      // 1. Compress the image before uploading
-      setStatus('compressing');
-      const options = {
-        maxSizeMB: 5,
-        maxWidthOrHeight: 2048,
-        useWebWorker: true
-      };
-      
+      const isVideo = file.type.startsWith('video');
+      const resourceType = isVideo ? 'video' : 'image';
       let fileToUpload = file;
-      try {
-        fileToUpload = await imageCompression(file, options);
-      } catch (err) {
-        console.warn('Compression failed, trying original file:', err);
+
+    if (!isVideo) {
+        setStatus('compressing');
+        const options = {
+          maxSizeMB: 5,
+          maxWidthOrHeight: 2048,
+          useWebWorker: true
+        };
+        
+        try {
+          fileToUpload = await imageCompression(file, options);
+        } catch (err) {
+          console.warn('Compression failed, trying original file:', err);
+        }
       }
 
-      // Final check for Cloudinary's 10MB limit
+      // Final check for Cloudinary's 10MB limit (videos can be larger on some plans, but we'll stick to 10MB for free tier safety)
       if (fileToUpload.size > 10 * 1024 * 1024) {
-        throw new Error('File is too large even after compression. Please use a smaller image.');
+        throw new Error('File is too large. Maximum is 10MB.');
       }
 
       setStatus('uploading');
@@ -74,7 +78,7 @@ const Upload = ({ onUploadSuccess, onClose }) => {
       if (!cloudName) throw new Error('Cloudinary Cloud Name missing');
 
       const res = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
         {
           method: 'POST',
           body: formData,
@@ -156,12 +160,16 @@ const Upload = ({ onUploadSuccess, onClose }) => {
           <form onSubmit={handleUpload} className="space-y-6">
             <div
               onClick={() => fileInputRef.current?.click()}
-              className={`relative aspect-video rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-items justify-center group ${preview ? 'border-primary/50' : 'border-white/5 hover:border-primary/30 hover:bg-white/5'
+              className={`relative aspect-video rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex items-center justify-center group ${preview ? 'border-primary/50' : 'border-white/5 hover:border-primary/30 hover:bg-white/5'
                 }`}
             >
               {preview ? (
                 <>
-                  <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                  {file?.type.startsWith('video') ? (
+                    <video src={preview} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                  ) : (
+                    <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                  )}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                     <span className="text-white font-bold uppercase tracking-widest text-xs">Change Asset</span>
                   </div>
@@ -173,7 +181,7 @@ const Upload = ({ onUploadSuccess, onClose }) => {
                   </div>
                   <div className="text-center">
                     <p className="text-white/60 font-bold">Select Visual Data</p>
-                    <p className="text-white/30 text-xs">PNG, JPG, WEBP up to 10MB</p>
+                    <p className="text-white/30 text-xs">Images or Videos up to 10MB</p>
                   </div>
                 </div>
               )}
@@ -181,7 +189,7 @@ const Upload = ({ onUploadSuccess, onClose }) => {
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept="image/*"
+                accept="image/*,video/*"
                 onChange={handleFileChange}
               />
             </div>
