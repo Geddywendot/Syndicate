@@ -4,12 +4,12 @@ import {
   Plus, 
   Image as ImageIcon, 
   LogOut, 
-  Shield, 
   Clock, 
   Menu,
   Activity,
   User,
-  Trash2
+  Trash2,
+  Handshake
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Auth from './components/Auth';
@@ -18,7 +18,7 @@ import Avatar from "boring-avatars";
 import { formatDistanceToNow } from 'date-fns';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState('gallery'); // Default to Gallery now
   const [messages, setMessages] = useState([]);
   const [memories, setMemories] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,6 +28,8 @@ const App = () => {
   const [quote, setQuote] = useState(null);
   const [flashback, setFlashback] = useState(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
+
+  const isAssetVideo = (url) => url?.includes('/video/') || url?.endsWith('.mp4') || url?.endsWith('.mov');
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -55,6 +57,12 @@ const App = () => {
     const { data, error } = await supabase.from('quotes').select('*');
     if (!error && data?.length > 0) {
       setQuote(data[Math.floor(Math.random() * data.length)]);
+    } else {
+      // Fallback quote if table is empty
+      setQuote({
+        text: "The collective is only as strong as its memories.",
+        author: "Syndicate Protocol"
+      });
     }
   };
 
@@ -151,8 +159,12 @@ const App = () => {
             animate={{ scale: 1 }}
             className="relative aspect-square rounded-[2rem] overflow-hidden border border-white/5"
           >
-            <img src={flashback.image_url} alt="Flashback" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+            {isAssetVideo(flashback.image_url) ? (
+              <video src={flashback.image_url} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+            ) : (
+              <img src={flashback.image_url} alt="Flashback" className="w-full h-full object-cover" />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent pointer-events-none" />
             <div className="absolute bottom-0 left-0 p-6">
                <p className="text-2xl font-black mb-1">{flashback.caption}</p>
                <p className="text-xs text-white/60">Stored {formatDistanceToNow(new Date(flashback.created_at))} ago</p>
@@ -187,11 +199,23 @@ const App = () => {
                   whileTap={{ scale: 0.98 }}
                   className={`relative rounded-2xl overflow-hidden bg-bg-surface border border-white/5 ${idx % 3 === 0 ? 'col-span-2 aspect-video' : 'aspect-square'}`}
                 >
-                  <img 
-                    src={item.image_url} 
-                    className="w-full h-full object-cover" 
-                    onClick={() => setSelectedImageIndex(memories.findIndex(m => m.id === item.id))}
-                  />
+                  {isAssetVideo(item.image_url) ? (
+                    <video 
+                      src={item.image_url} 
+                      className="w-full h-full object-cover" 
+                      muted 
+                      loop 
+                      autoPlay 
+                      playsInline
+                      onClick={() => setSelectedImageIndex(memories.findIndex(m => m.id === item.id))}
+                    />
+                  ) : (
+                    <img 
+                      src={item.image_url} 
+                      className="w-full h-full object-cover" 
+                      onClick={() => setSelectedImageIndex(memories.findIndex(m => m.id === item.id))}
+                    />
+                  )}
                   <div className="absolute inset-0 bg-black/20 pointer-events-none" />
                   
                   {item.uploaded_by === session?.user?.id && (
@@ -310,7 +334,7 @@ const App = () => {
     return (
       <div className="min-h-screen bg-bg-deep flex items-center justify-center">
         <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity }}>
-          <Shield className="text-primary w-12 h-12" />
+          <Handshake className="text-primary w-12 h-12" />
         </motion.div>
       </div>
     );
@@ -324,7 +348,7 @@ const App = () => {
       <header className="fixed top-0 left-0 right-0 z-40 bg-bg-deep/80 backdrop-blur-xl border-b border-white/5">
         <div className="px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Shield className="text-primary w-5 h-5" />
+            <Handshake className="text-primary w-5 h-5" />
             <span className="font-black uppercase tracking-tighter text-lg">Syndicate</span>
           </div>
           <button 
@@ -356,17 +380,17 @@ const App = () => {
 
       {/* Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-bg-surface/80 backdrop-blur-2xl border-t border-white/5 pb-8 pt-4 px-6">
-        <div className="max-w-lg mx-auto flex justify-between items-center">
+        <div className="max-lg mx-auto flex justify-between items-center px-4">
           {[
-            { id: 'home', icon: Shield, label: 'Core' },
             { id: 'gallery', icon: ImageIcon, label: 'Gallery' },
+            { id: 'home', icon: Handshake, label: 'Home' },
             { id: 'wall', icon: Menu, label: 'Wall' },
-            { id: 'settings', icon: Activity, label: 'System' }
+            { id: 'settings', icon: User, label: 'Profile' }
           ].map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center gap-1 transition-all ${activeTab === item.id ? 'text-primary' : 'text-white/20'}`}
+              className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === item.id ? 'text-primary' : 'text-white/20'}`}
             >
               <item.icon size={20} />
               <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
@@ -412,11 +436,21 @@ const App = () => {
               className="w-full h-full flex items-center justify-center p-4"
             >
               <div className="relative w-full max-w-lg aspect-[3/4]">
-                <img 
-                  src={memories[selectedImageIndex].image_url} 
-                  className="w-full h-full object-contain rounded-2xl"
-                  alt="Full view"
-                />
+                {isAssetVideo(memories[selectedImageIndex].image_url) ? (
+                  <video 
+                    src={memories[selectedImageIndex].image_url} 
+                    className="w-full h-full object-contain rounded-2xl" 
+                    controls 
+                    autoPlay 
+                    playsInline 
+                  />
+                ) : (
+                  <img 
+                    src={memories[selectedImageIndex].image_url} 
+                    className="w-full h-full object-contain rounded-2xl"
+                    alt="Full view"
+                  />
+                )}
                 <div className="absolute bottom-[-60px] left-0 right-0 text-center">
                   <p className="text-white font-black uppercase tracking-widest text-sm mb-1">
                     {memories[selectedImageIndex].friend_name}
