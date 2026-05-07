@@ -1,27 +1,27 @@
-# 🛡️ Syndicate Memory Wall
+# Syndicate Memory Wall
 
 A premium, mobile-first social collective for close friend groups (The Syndicate). Store memories, broadcast thoughts, and relive the past in a high-performance, dark-mode HUD interface.
 
-## 🚀 Core Features
+## Core Features
 
-- **📱 Mobile-First Architecture**: Native-app feel with a bottom navigation system (Core, Gallery, Wall, System).
-- **🏠 Core (Home)**:
+- **Mobile-First Architecture**: Native-app feel with a bottom navigation system (Core, Gallery, Wall, System).
+- **Home**:
   - **Daily Intelligence**: Randomly selected friendship quotes from the collective archive.
   - **Flashback Protocol**: Automatic surfacing of "on this day" memories or random archival hits.
-- **🖼️ Bento Gallery**: 
+- **Bento Gallery**: 
   - Memories are grouped by uploader.
   - Dynamic "Bento-style" masonry grid for a premium aesthetic.
   - **Swipeable Lightbox**: Full-screen immersive view with swipe gestures and pagination.
-- **💬 Tweet Wall**: A text-based broadcast station for thoughts and messages.
-- **⚙️ System (Profile)**: 
+- **Tweet Wall**: A text-based broadcast station for thoughts and messages.
+- **System (Profile)**: 
   - Personal stats (Upload count, Message count).
   - Manage your own archive.
   - Secure session deactivation.
-- **⚡ Advanced Media Pipeline**:
+- **Advanced Media Pipeline**:
   - **Client-Side Compression**: High-res photos are automatically optimized before upload to stay under 10MB while maintaining sharp quality.
   - **Cloudinary Integration**: Blazing fast media delivery.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Frontend**: React 19, Vite, Tailwind CSS v4, Framer Motion.
 - **Icons & UI**: Lucide React, Boring Avatars.
@@ -29,7 +29,7 @@ A premium, mobile-first social collective for close friend groups (The Syndicate
 - **Storage**: Cloudinary (Image Hosting).
 - **Utilities**: Date-fns (Relative time), Browser-image-compression.
 
-## 🔑 Environment Variables
+## Environment Variables
 
 Create a `frontend/.env` file:
 
@@ -40,7 +40,7 @@ VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name
 VITE_CLOUDINARY_UPLOAD_PRESET=your_unsigned_preset_name
 ```
 
-## 🏗️ Database Setup
+## Database Setup
 
 Run these commands in your **Supabase SQL Editor**:
 
@@ -87,14 +87,14 @@ CREATE POLICY "Auth Insert Memories" ON memories FOR INSERT WITH CHECK (auth.uid
 CREATE POLICY "Auth Insert Messages" ON messages FOR INSERT WITH CHECK (auth.uid() = uploaded_by);
 ```
 
-## 📂 Project Structure
+## Project Structure
 
 - `/frontend`: React application source code.
 - `/frontend/src/components`: UI components (Auth, Upload).
 - `/frontend/src/lib`: Core library initializations (Supabase).
 - `/backend`: (Optional) Schema definitions and SQL migrations.
 
-## 🤝 The Syndicate Protocol
+## The Syndicate Protocol
 
 1. **Authentication**: Use Email or GitHub to enter the network.
 2. **Identity**: Set your "Agent Name" during your first upload.
