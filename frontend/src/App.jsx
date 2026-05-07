@@ -380,7 +380,7 @@ const App = () => {
 
       {/* Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-bg-surface/80 backdrop-blur-2xl border-t border-white/5 pb-8 pt-4 px-6">
-        <div className="max-lg mx-auto flex justify-between items-center px-4">
+        <div className="max-w-lg mx-auto flex justify-between items-center px-4">
           {[
             { id: 'gallery', icon: ImageIcon, label: 'Gallery' },
             { id: 'home', icon: Handshake, label: 'Home' },
