@@ -9,7 +9,9 @@ import {
   Activity,
   User,
   Trash2,
-  Handshake
+  Handshake,
+  Loader2,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Auth from './components/Auth';
@@ -28,6 +30,7 @@ const App = () => {
   const [quote, setQuote] = useState(null);
   const [flashback, setFlashback] = useState(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
 
   const isAssetVideo = (url) => url?.includes('/video/') || url?.endsWith('.mp4') || url?.endsWith('.mov');
 
@@ -42,8 +45,11 @@ const App = () => {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsSettingPassword(true);
+      }
     });
 
     fetchMemories();
@@ -330,6 +336,62 @@ const App = () => {
     );
   };
 
+  const renderPasswordSetup = () => {
+    const [newPassword, setNewPassword] = useState('');
+    const [updating, setUpdating] = useState(false);
+
+    const handleUpdatePassword = async (e) => {
+      e.preventDefault();
+      setUpdating(true);
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (!error) {
+        setIsSettingPassword(false);
+        showToast('Security credentials updated. Welcome to the Syndicate.');
+      } else {
+        showToast(error.message, 'error');
+      }
+      setUpdating(false);
+    };
+
+    return (
+      <div className="min-h-screen bg-bg-deep flex items-center justify-center p-6">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md bg-bg-surface border border-white/10 p-8 rounded-[2.5rem] shadow-2xl"
+        >
+          <div className="flex justify-center mb-6">
+            <div className="p-4 bg-primary/10 rounded-2xl">
+              <Lock className="text-primary w-10 h-10" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-black uppercase tracking-tighter text-center mb-2">Protocol: Password Setup</h2>
+          <p className="text-white/40 text-xs text-center mb-8 uppercase tracking-widest">Establish your permanent security credentials</p>
+          
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 w-5 h-5" />
+              <input
+                type="password"
+                placeholder="New Security Key"
+                required
+                className="w-full pl-12 pr-4 py-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+            <button
+              disabled={updating}
+              className="w-full py-4 bg-primary text-black font-black uppercase tracking-widest rounded-2xl hover:shadow-[0_0_30px_rgba(0,242,255,0.3)] transition-all flex items-center justify-center gap-2 text-xs"
+            >
+              {updating ? <Loader2 className="animate-spin w-5 h-5" /> : 'Finalize Credentials'}
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bg-deep flex items-center justify-center">
@@ -341,6 +403,7 @@ const App = () => {
   }
 
   if (!session) return <Auth />;
+  if (isSettingPassword) return renderPasswordSetup();
 
   return (
     <div className="min-h-screen bg-bg-deep text-white selection:bg-primary selection:text-black">
