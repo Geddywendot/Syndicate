@@ -9,7 +9,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Hash,
-  User
+  User,
+  Heart,
+  Shield
 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
 
@@ -19,9 +21,27 @@ const Upload = ({ onUploadSuccess, onClose }) => {
   const [caption, setCaption] = useState('');
   const [friendName, setFriendName] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle, uploading, success, error
+  const [status, setStatus] = useState('idle'); 
   const [error, setError] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    fetchGroups();
+  }, []);
+
+  const fetchGroups = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from('group_members')
+      .select('group_id, groups(name)')
+      .eq('user_id', user.id);
+    
+    setGroups(data || []);
+  };
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -63,10 +83,9 @@ const Upload = ({ onUploadSuccess, onClose }) => {
         }
       }
 
-      // Check limits: 10MB for images, 100MB for videos
       const limit = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
       if (fileToUpload.size > limit) {
-        throw new Error(`File is too large. Maximum is ${isVideo ? '100MB' : '10MB'}.`);
+        throw new Error(`File too large. Max: ${isVideo ? '100MB' : '10MB'}`);
       }
 
       setStatus('uploading');
@@ -74,13 +93,10 @@ const Upload = ({ onUploadSuccess, onClose }) => {
       const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
       const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
       
-      if (!cloudName) throw new Error('Cloudinary Cloud Name missing');
-
       let uploadResult;
 
-      // CHUNKED UPLOAD LOGIC for large videos (> 5MB)
       if (isVideo && fileToUpload.size > 5 * 1024 * 1024) {
-        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+        const chunkSize = 5 * 1024 * 1024;
         const totalChunks = Math.ceil(fileToUpload.size / chunkSize);
         const uniqueUploadId = `id_${Date.now()}`;
         
@@ -106,33 +122,20 @@ const Upload = ({ onUploadSuccess, onClose }) => {
             }
           );
 
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error?.message || `Chunk ${i+1} failed`);
-          }
-          
-          if (i === totalChunks - 1) {
-            uploadResult = await res.json();
-          }
+          if (!res.ok) throw new Error('Chunked upload failed');
+          if (i === totalChunks - 1) uploadResult = await res.json();
         }
       } else {
-        // STANDARD UPLOAD for images and small videos
         const formData = new FormData();
         formData.append('file', fileToUpload);
         formData.append('upload_preset', uploadPreset);
 
         const res = await fetch(
           `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
-          {
-            method: 'POST',
-            body: formData,
-          }
+          { method: 'POST', body: formData }
         );
 
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error?.message || 'Upload failed');
-        }
+        if (!res.ok) throw new Error('Upload failed');
         uploadResult = await res.json();
       }
 
@@ -143,7 +146,8 @@ const Upload = ({ onUploadSuccess, onClose }) => {
           image_url: imageUrl,
           caption: caption,
           uploaded_by: user?.id,
-          friend_name: friendName
+          friend_name: friendName,
+          group_id: selectedGroupId || null
         }
       ]);
 
@@ -156,7 +160,6 @@ const Upload = ({ onUploadSuccess, onClose }) => {
       }, 1500);
 
     } catch (err) {
-      console.error('Upload process failed:', err);
       setError(err.message);
       setStatus('error');
     } finally {
@@ -165,46 +168,43 @@ const Upload = ({ onUploadSuccess, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="absolute inset-0 bg-black/90 backdrop-blur-md"
+        className="absolute inset-0 bg-black/20 backdrop-blur-md"
       />
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-        className="relative w-full max-w-xl bg-bg-surface border border-white/10 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative w-full max-w-xl bg-bg-deep rounded-[3rem] overflow-hidden shadow-2xl border border-white"
       >
-        {/* Header Decor */}
-        <div className="h-1 w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
-
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 text-white/30 hover:text-white transition-colors z-20"
+          className="absolute top-8 right-8 text-text-muted hover:text-text-main transition-colors z-20 w-10 h-10 bg-white rounded-full flex items-center justify-center card-shadow border border-black/[0.03]"
         >
-          <X size={24} />
+          <X size={20} />
         </button>
 
-        <div className="p-8">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-primary/10 rounded-2xl">
-              <UploadCloud className="text-primary w-6 h-6" />
+        <div className="p-10">
+          <div className="flex items-center gap-4 mb-10">
+            <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
+              <UploadCloud size={24} />
             </div>
             <div>
-              <h2 className="text-2xl font-black uppercase tracking-tighter">Secure Upload</h2>
-              <p className="text-white/40 text-xs font-bold uppercase tracking-widest">Protocol: Encrypted Memory Transfer</p>
+              <h2 className="text-2xl font-extrabold tracking-tight">Share a Moment</h2>
+              <p className="text-text-muted text-[10px] font-bold uppercase tracking-widest">Share with your friends</p>
             </div>
           </div>
 
           <form onSubmit={handleUpload} className="space-y-6">
             <div
               onClick={() => fileInputRef.current?.click()}
-              className={`relative aspect-video rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex items-center justify-center group ${preview ? 'border-primary/50' : 'border-white/5 hover:border-primary/30 hover:bg-white/5'}`}
+              className={`relative aspect-video rounded-[2rem] border-2 border-dashed transition-all cursor-pointer overflow-hidden flex items-center justify-center bg-white group ${preview ? 'border-primary' : 'border-black/[0.05] hover:border-primary/50'}`}
             >
               {preview ? (
                 <>
@@ -214,84 +214,97 @@ const Upload = ({ onUploadSuccess, onClose }) => {
                     <img src={preview} alt="Preview" className="w-full h-full object-cover" />
                   )}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                    <span className="text-white font-bold uppercase tracking-widest text-xs">Change Asset</span>
+                    <span className="text-white font-bold uppercase tracking-widest text-xs">Change Media</span>
                   </div>
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-4 p-8">
-                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <ImageIcon className="text-white/20 w-8 h-8 group-hover:text-primary transition-colors" />
+                  <div className="w-16 h-16 rounded-full bg-bg-deep flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
+                    <ImageIcon className="text-text-muted w-8 h-8 group-hover:text-primary transition-colors" />
                   </div>
                   <div className="text-center">
-                    <p className="text-white/60 font-bold">Select Visual Data</p>
-                    <p className="text-white/30 text-xs">Images or Videos up to 10MB</p>
+                    <p className="text-text-main font-bold">Select Media</p>
+                    <p className="text-text-muted text-xs font-medium">Drag & Drop or Click to browse</p>
                   </div>
                 </div>
               )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept="image/*,video/*"
-                onChange={handleFileChange}
-              />
+              <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*" onChange={handleFileChange} />
             </div>
 
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Agent Name (Friend Name)"
-                className="w-full pl-12 pr-4 py-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
-                value={friendName}
-                onChange={(e) => setFriendName(e.target.value)}
-              />
-            </div>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="relative group">
+                <User className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Who's in this? (Friend Name)"
+                  className="w-full pl-14 pr-6 py-5 bg-white border border-black/[0.03] rounded-2xl outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all font-medium text-sm card-shadow"
+                  value={friendName}
+                  onChange={(e) => setFriendName(e.target.value)}
+                />
+              </div>
 
-            <div className="relative">
-              <Hash className="absolute left-4 top-4 text-white/20 w-5 h-5" />
-              <textarea
-                placeholder="Intelligence caption... #metadata"
-                className="w-full pl-12 pr-4 py-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all min-h-[120px] resize-none"
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-              />
+              {groups.length > 0 && (
+                <div className="relative group">
+                  <Shield className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+                  <select
+                    className="w-full pl-14 pr-6 py-5 bg-white border border-black/[0.03] rounded-2xl outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all font-medium text-sm card-shadow appearance-none"
+                    value={selectedGroupId}
+                    onChange={(e) => setSelectedGroupId(e.target.value)}
+                  >
+                    <option value="">Private Archive (No Group)</option>
+                    {groups.map(g => (
+                      <option key={g.group_id} value={g.group_id}>{g.groups.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="relative group">
+                <Hash className="absolute left-5 top-6 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+                <textarea
+                  placeholder="Tell the story..."
+                  className="w-full pl-14 pr-6 py-6 bg-white border border-black/[0.03] rounded-2xl outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all font-medium text-sm card-shadow min-h-[120px] resize-none"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                />
+              </div>
             </div>
 
             <button
               disabled={!file || uploading}
-              className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${status === 'success'
+              className={`w-full py-5 rounded-2xl font-extrabold uppercase tracking-widest transition-all flex items-center justify-center gap-3 shadow-xl ${status === 'success'
                   ? 'bg-green-500 text-white'
-                  : 'bg-primary text-black hover:shadow-[0_0_30px_rgba(0,242,255,0.4)] disabled:opacity-30 disabled:grayscale'
+                  : 'bg-black text-white hover:bg-primary hover:shadow-primary/20 disabled:opacity-20'
                 }`}
             >
               {status === 'idle' && (
                 <>
-                  <span>Initiate Transfer</span>
+                  <span>Post Moment</span>
+                  <Heart size={18} />
                 </>
               )}
               {status === 'uploading' && (
                 <>
                   <Loader2 className="animate-spin w-5 h-5" />
-                  <span>Processing...</span>
+                  <span>Sharing...</span>
                 </>
               )}
               {status === 'success' && (
                 <>
                   <CheckCircle2 className="w-5 h-5" />
-                  <span>Secured</span>
+                  <span>Shared!</span>
                 </>
               )}
               {status === 'error' && (
                 <>
-                  <AlertCircle className="w-5 h-5 text-red-500" />
-                  <span>Transfer Failed</span>
+                  <AlertCircle className="w-5 h-5" />
+                  <span>Failed to share</span>
                 </>
               )}
             </button>
 
             {error && (
-              <p className="text-red-400 text-center text-xs font-bold uppercase tracking-widest">{error}</p>
+              <p className="text-accent text-center text-[10px] font-bold uppercase tracking-[0.2em]">{error}</p>
             )}
           </form>
         </div>

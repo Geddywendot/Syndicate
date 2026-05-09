@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { motion } from 'framer-motion';
-import { Shield, Mail, Lock, User, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Shield, Mail, Lock, Loader2, Heart, UserPlus, LogIn, User } from 'lucide-react';
 
-const Auth = ({ onAuthSuccess }) => {
+const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [formData, setFormData] = useState({
+    name: '',
     email: '',
     password: '',
   });
@@ -15,97 +18,180 @@ const Auth = ({ onAuthSuccess }) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      });
-      if (error) throw error;
+      if (isRegistering) {
+        const { error } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.name,
+            }
+          }
+        });
+        if (error) throw error;
+        setSuccess('Account created! You can now log in.');
+        setIsRegistering(false);
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        });
+        if (error) {
+          console.error('Supabase Auth Error:', error);
+          throw error;
+        }
+      }
     } catch (err) {
       setError(err.message);
+      console.error('Catch Auth Error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-deep p-4 overflow-hidden relative">
-      {/* Background Decor */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+    <div className="min-h-screen flex items-center justify-center bg-bg-deep p-6 relative overflow-hidden">
+      {/* Decorative background elements */}
+      <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
       
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-bg-surface/80 backdrop-blur-xl border border-white/5 p-8 rounded-3xl shadow-2xl relative z-10"
+        layout
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md glass-panel p-10 rounded-[3rem] card-shadow relative z-10 border border-white"
       >
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center mb-10">
           <motion.div 
-            whileHover={{ scale: 1.1, rotate: 5 }}
-            className="p-4 bg-primary/10 rounded-2xl border border-primary/20 shadow-[0_0_20px_rgba(0,242,255,0.1)]"
+            whileHover={{ scale: 1.05 }}
+            className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white shadow-xl shadow-primary/20"
           >
-            <Shield className="text-primary w-12 h-12" />
+            <Heart size={32} className="fill-white/20" />
           </motion.div>
         </div>
 
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black tracking-tighter uppercase mb-2">
-            Syndicate <span className="text-primary">Wall</span>
+        <div className="text-center mb-10 space-y-2">
+          <h1 className="text-4xl font-extrabold tracking-tight text-text-main">
+            Syndicate
           </h1>
-          <p className="text-white/40 text-sm font-medium uppercase tracking-widest">
-            Restricted Access Protocol
+          <p className="text-text-muted text-sm font-semibold uppercase tracking-[0.2em]">
+            {isRegistering ? 'Create Account' : 'Welcome Back'}
           </p>
         </div>
 
         {error && (
           <motion.div 
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm font-medium"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-accent/5 border border-accent/10 rounded-2xl text-accent text-xs font-bold text-center"
           >
             {error}
           </motion.div>
         )}
 
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-green-500/5 border border-green-500/10 rounded-2xl text-green-600 text-xs font-bold text-center"
+          >
+            {success}
+          </motion.div>
+        )}
+
         <form onSubmit={handleAuth} className="space-y-4">
-          <div className="relative">
-            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 w-5 h-5" />
-            <input
-              type="email"
-              placeholder="Email Protocol"
-              required
-              className="w-full pl-12 pr-4 py-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
+          <AnimatePresence mode="wait">
+            {isRegistering && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-1"
+              >
+                <div className="relative group">
+                  <User className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Full Name"
+                    required
+                    className="w-full pl-14 pr-6 py-5 bg-black/[0.03] border border-transparent rounded-[1.5rem] outline-none focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all text-sm font-medium text-text-main"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="space-y-1">
+            <div className="relative group">
+              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+              <input
+                type="email"
+                placeholder="Email Address"
+                required
+                className="w-full pl-14 pr-6 py-5 bg-black/[0.03] border border-transparent rounded-[1.5rem] outline-none focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all text-sm font-medium text-text-main"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
           </div>
 
-          <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 w-5 h-5" />
-            <input
-              type="password"
-              placeholder="Security Key"
-              required
-              className="w-full pl-12 pr-4 py-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            />
+          <div className="space-y-1">
+            <div className="relative group">
+              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+              <input
+                type="password"
+                placeholder="Password"
+                required
+                className="w-full pl-14 pr-6 py-5 bg-black/[0.03] border border-transparent rounded-[1.5rem] outline-none focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all text-sm font-medium text-text-main"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              />
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 bg-primary text-black font-black uppercase tracking-widest rounded-2xl hover:shadow-[0_0_30px_rgba(0,242,255,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs"
+            className="w-full py-5 bg-black text-white font-bold rounded-[1.5rem] hover:bg-primary transition-all flex items-center justify-center gap-3 text-sm mt-4 shadow-xl shadow-black/10 hover:shadow-primary/20"
           >
-            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : 'Authenticate'}
+            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : (
+              <>
+                <span>{isRegistering ? 'Join the Syndicate' : 'Enter Space'}</span>
+                {isRegistering ? <UserPlus size={16} /> : <LogIn size={16} />}
+              </>
+            )}
           </button>
         </form>
 
-        <p className="mt-8 text-center text-[10px] text-white/20 uppercase font-black tracking-[0.3em]">
-          Syndicate Authorized Personnel Only
-        </p>
+        <div className="mt-8 text-center">
+          <button 
+            onClick={() => setIsRegistering(!isRegistering)}
+            className="text-xs font-bold text-text-muted hover:text-primary transition-colors flex items-center justify-center gap-2 mx-auto"
+          >
+            {isRegistering ? (
+              <>
+                <LogIn size={14} />
+                <span>Already a member? Log in</span>
+              </>
+            ) : (
+              <>
+                <UserPlus size={14} />
+                <span>New here? Register a new account</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="mt-10 pt-8 border-t border-black/[0.03] text-center">
+          <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">
+            Syndicate Space v4.2 • Public Access Enabled
+          </p>
+        </div>
       </motion.div>
     </div>
   );
