@@ -1,36 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import { 
-  Plus, 
+  Heart, 
   Image as ImageIcon, 
-  LogOut, 
-  Clock, 
   Menu,
-  Activity,
   User,
-  Trash2,
-  Handshake,
-  Loader2,
-  Lock
+  Plus,
+  Lock,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Auth from './components/Auth';
 import Upload from './components/Upload';
-import Avatar from "boring-avatars";
+import Home from './components/Home';
+import Gallery from './components/Gallery';
+import Wall from './components/Wall';
+import Profile from './components/Profile';
+import SyndicateAvatar from './components/SyndicateAvatar';
 import { formatDistanceToNow } from 'date-fns';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState('gallery'); // Default to Gallery now
-  const [messages, setMessages] = useState([]);
-  const [memories, setMemories] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [session, setSession] = useState(null);
-  const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [quote, setQuote] = useState(null);
-  const [flashback, setFlashback] = useState(null);
+  const [memories, setMemories] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [activeTab, setActiveTab] = useState('home');
+  const [showUpload, setShowUpload] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [isSettingPassword, setIsSettingPassword] = useState(false);
+  const [galleryFilter, setGalleryFilter] = useState('All');
+  const [toast, setToast] = useState(null);
 
   const isAssetVideo = (url) => url?.includes('/video/') || url?.endsWith('.mp4') || url?.endsWith('.mov');
 
@@ -39,301 +38,147 @@ const App = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const [memoriesPage, setMemoriesPage] = useState(0);
+  const [hasMoreMemories, setHasMoreMemories] = useState(true);
+  const ITEMS_PER_PAGE = 12;
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const handleAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
+      if (window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite')) {
+        setIsSettingPassword(true);
+      }
       setLoading(false);
-    });
+      
+      if (session) {
+        setMemoriesPage(0);
+        fetchMemories(session.user.id, 0, true);
+        fetchMessages();
+      } else {
+        setMemories([]);
+        setMessages([]);
+      }
+    };
+
+    handleAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      if (event === 'SIGNED_IN' && session) {
+        setMemoriesPage(0);
+        fetchMemories(session.user.id, 0, true);
+        fetchMessages();
+      }
+      if (event === 'SIGNED_OUT') {
+        setMemories([]);
+        setMessages([]);
+      }
       if (event === 'PASSWORD_RECOVERY') {
         setIsSettingPassword(true);
       }
     });
 
-    fetchMemories();
-    fetchQuote();
-    fetchMessages();
-
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchQuote = async () => {
-    const { data, error } = await supabase.from('quotes').select('*');
-    if (!error && data?.length > 0) {
-      setQuote(data[Math.floor(Math.random() * data.length)]);
-    } else {
-      // Fallback quote if table is empty
-      setQuote({
-        text: "The collective is only as strong as its memories.",
-        author: "Syndicate Protocol"
-      });
-    }
-  };
+  const fetchMemories = async (userId, page = 0, reset = false) => {
+    if (!userId) return;
+    
+    // Get groups user is in
+    const { data: groupData } = await supabase.from('group_members').select('group_id').eq('user_id', userId);
+    const groupIds = groupData?.map(g => g.group_id) || [];
 
-  const fetchMemories = async () => {
-    const { data, error } = await supabase.from('memories').select('*').order('created_at', { ascending: false });
+    // Get following IDs (accepted)
+    const { data: followData } = await supabase.from('follows').select('following_id').eq('follower_id', userId).eq('status', 'accepted');
+    const followingIds = followData?.map(f => f.following_id) || [];
+
+    const from = page * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
+
+    // Visibility Query: (Own) OR (Followed & No Group) OR (In Group)
+    let query = supabase.from('memories').select('*');
+    
+    const conditions = [`uploaded_by.eq.${userId}`];
+    if (groupIds.length > 0) conditions.push(`group_id.in.(${groupIds.join(',')})`);
+    if (followingIds.length > 0) conditions.push(`and(uploaded_by.in.(${followingIds.join(',')}),group_id.is.null)`);
+
+    query = query.or(conditions.join(','));
+
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
     if (!error) {
-      const all = data || [];
-      setMemories(all);
-      calculateFlashback(all);
+      if (reset) {
+        setMemories(data || []);
+      } else {
+        setMemories(prev => [...prev, ...(data || [])]);
+      }
+      setHasMoreMemories(data?.length === ITEMS_PER_PAGE);
     }
   };
 
-  const calculateFlashback = (all) => {
-    if (all.length === 0) return;
-    const today = new Date();
-    const matches = all.filter(m => {
-      const d = new Date(m.created_at);
-      return d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
-    });
-    setFlashback(matches.length > 0 ? matches[Math.floor(Math.random() * matches.length)] : all[Math.floor(Math.random() * all.length)]);
+  const loadMoreMemories = () => {
+    if (hasMoreMemories && session?.user) {
+      const nextPage = memoriesPage + 1;
+      setMemoriesPage(nextPage);
+      fetchMemories(session.user.id, nextPage);
+    }
   };
 
   const fetchMessages = async () => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(50); // Scalability: limit messages
     if (!error) setMessages(data || []);
   };
 
   const handleNewMessage = async (text) => {
-    if (!text.trim()) return;
-    
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
-    if (!currentSession) {
-      showToast('Session expired. Please log in.', 'error');
-      return;
-    }
-
-    const friend_name = memories.find(m => m.uploaded_by === currentSession.user.id)?.friend_name || currentSession.user.email.split('@')[0];
-    
+    if (!session?.user) return;
     const { error } = await supabase.from('messages').insert([
-      { text: text.trim(), friend_name, uploaded_by: currentSession.user.id }
+      { text, uploaded_by: session.user.id, friend_name: session.user.user_metadata?.full_name || session.user.email.split('@')[0] }
     ]);
-
     if (!error) {
       fetchMessages();
       showToast('Message broadcasted.');
-    } else {
-      showToast('Security block: broadcast failed.', 'error');
     }
   };
 
   const handleDeleteMemory = async (id) => {
+    if (!session?.user) return;
+    
+    // Safety check: Ensure user owns the memory before deleting
+    const memoryToDelete = memories.find(m => m.id === id);
+    if (memoryToDelete?.uploaded_by !== session.user.id) {
+      showToast('Unauthorized deletion attempt blocked.', 'error');
+      return;
+    }
+
     const { error } = await supabase.from('memories').delete().eq('id', id);
     if (!error) {
-      fetchMemories();
-      showToast('Memory decommissioned.');
+      fetchMemories(session.user.id);
+      showToast('Memory deleted.');
     }
   };
 
   const handleDeleteMessage = async (id) => {
+    if (!session?.user) return;
+
+    // Safety check: Ensure user owns the message before deleting
+    const messageToDelete = messages.find(m => m.id === id);
+    if (messageToDelete?.uploaded_by !== session.user.id) {
+      showToast('Unauthorized deletion attempt blocked.', 'error');
+      return;
+    }
+
     const { error } = await supabase.from('messages').delete().eq('id', id);
     if (!error) {
       fetchMessages();
       showToast('Transmission erased.');
     }
-  };
-
-  const renderHome = () => (
-    <div className="space-y-8 pb-24">
-      {quote && (
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-6 bg-primary/10 border-l-4 border-primary rounded-r-2xl"
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <Activity size={14} className="text-primary animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">Intelligence</span>
-          </div>
-          <p className="text-xl font-medium text-white italic leading-relaxed">"{quote.text}"</p>
-          <p className="text-[10px] text-white/40 font-black uppercase tracking-widest mt-2">— {quote.author}</p>
-        </motion.div>
-      )}
-
-      {flashback && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-black uppercase tracking-tighter text-accent flex items-center gap-2">
-            <Clock size={18} /> Flashback Protocol
-          </h2>
-          <motion.div 
-            initial={{ scale: 0.95 }}
-            animate={{ scale: 1 }}
-            className="relative aspect-square rounded-[2rem] overflow-hidden border border-white/5"
-          >
-            {isAssetVideo(flashback.image_url) ? (
-              <video src={flashback.image_url} className="w-full h-full object-cover" autoPlay muted loop playsInline />
-            ) : (
-              <img src={flashback.image_url} alt="Flashback" className="w-full h-full object-cover" />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent pointer-events-none" />
-            <div className="absolute bottom-0 left-0 p-6">
-               <p className="text-2xl font-black mb-1">{flashback.caption}</p>
-               <p className="text-xs text-white/60">Stored {formatDistanceToNow(new Date(flashback.created_at))} ago</p>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderGallery = () => {
-    const grouped = memories.reduce((acc, memory) => {
-      const name = memory.friend_name || 'Unknown';
-      if (!acc[name]) acc[name] = [];
-      acc[name].push(memory);
-      return acc;
-    }, {});
-
-    return (
-      <div className="space-y-12 pb-24">
-        {Object.entries(grouped).map(([name, items]) => (
-          <div key={name} className="space-y-4">
-            <div className="flex items-center gap-3 px-2">
-              <Avatar size={32} name={name} variant="beam" colors={["#00f2ff", "#ffb800", "#ffffff"]} />
-              <h3 className="font-black uppercase tracking-widest text-sm">{name}'s Archive</h3>
-              <span className="ml-auto text-[10px] bg-white/5 px-2 py-1 rounded-full text-white/40">{items.length} Assets</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {items.map((item, idx) => (
-                <motion.div 
-                  key={item.id}
-                  whileTap={{ scale: 0.98 }}
-                  className={`relative rounded-2xl overflow-hidden bg-bg-surface border border-white/5 ${idx % 3 === 0 ? 'col-span-2 aspect-video' : 'aspect-square'}`}
-                >
-                  {isAssetVideo(item.image_url) ? (
-                    <video 
-                      src={item.image_url} 
-                      className="w-full h-full object-cover" 
-                      muted 
-                      loop 
-                      autoPlay 
-                      playsInline
-                      onClick={() => setSelectedImageIndex(memories.findIndex(m => m.id === item.id))}
-                    />
-                  ) : (
-                    <img 
-                      src={item.image_url} 
-                      className="w-full h-full object-cover" 
-                      onClick={() => setSelectedImageIndex(memories.findIndex(m => m.id === item.id))}
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-                  
-                  {item.uploaded_by === session?.user?.id && (
-                    <button 
-                      onClick={() => handleDeleteMemory(item.id)}
-                      className="absolute top-3 right-3 p-2 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded-xl backdrop-blur-md transition-all border border-red-500/20"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  const renderWall = () => (
-    <div className="space-y-6 pb-24">
-      <div className="bg-bg-surface p-4 rounded-3xl border border-white/5">
-        <textarea 
-          placeholder="What's on your mind?"
-          className="w-full bg-transparent border-none outline-none resize-none min-h-[100px] text-sm"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              if (e.target.value.trim()) {
-                handleNewMessage(e.target.value);
-                e.target.value = '';
-              }
-            }
-          }}
-        />
-        <div className="flex justify-end mt-2">
-          <p className="text-[10px] text-white/20 uppercase font-bold">Press Enter to Broadcast</p>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {messages.map((msg) => (
-          <motion.div 
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            key={msg.id}
-            className="p-5 bg-bg-surface/50 border border-white/5 rounded-3xl flex gap-4"
-          >
-            <Avatar size={40} name={msg.friend_name} variant="beam" />
-            <div className="space-y-1 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-black text-xs uppercase text-primary">{msg.friend_name}</span>
-                <span className="text-[9px] text-white/20">• {formatDistanceToNow(new Date(msg.created_at))} ago</span>
-              </div>
-              <p className="text-sm text-white/80 leading-relaxed">{msg.text}</p>
-            </div>
-            {msg.uploaded_by === session?.user?.id && (
-              <button 
-                onClick={() => handleDeleteMessage(msg.id)}
-                className="self-start p-2 text-white/10 hover:text-red-500 transition-colors"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderSettings = () => {
-    const myMemories = memories.filter(m => m.uploaded_by === session?.user?.id);
-    return (
-      <div className="space-y-8 pb-24">
-        <div className="flex flex-col items-center py-8 space-y-4">
-          <Avatar size={100} name={session?.user?.email} variant="beam" />
-          <div className="text-center">
-            <h2 className="text-2xl font-black uppercase tracking-tighter">{session?.user?.email.split('@')[0]}</h2>
-            <p className="text-xs text-white/30 uppercase tracking-[0.2em] mt-1">Syndicate Agent</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-bg-surface p-6 rounded-3xl border border-white/5 text-center">
-            <p className="text-[10px] text-white/30 uppercase font-black mb-1">Uploads</p>
-            <p className="text-2xl font-black text-primary">{myMemories.length}</p>
-          </div>
-          <div className="bg-bg-surface p-6 rounded-3xl border border-white/5 text-center">
-            <p className="text-[10px] text-white/30 uppercase font-black mb-1">Messages</p>
-            <p className="text-2xl font-black text-accent">{messages.filter(m => m.uploaded_by === session?.user?.id).length}</p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <h3 className="text-xs font-black uppercase tracking-widest text-white/20 px-2">Your Archive</h3>
-          <div className="grid grid-cols-3 gap-2">
-            {myMemories.map(m => (
-              <div key={m.id} className="aspect-square rounded-xl overflow-hidden border border-white/5 bg-bg-surface">
-                <img src={m.image_url} className="w-full h-full object-cover" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <button 
-          onClick={() => supabase.auth.signOut()}
-          className="w-full py-4 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-500 hover:text-white transition-all"
-        >
-          Deactivate Session
-        </button>
-      </div>
-    );
   };
 
   const renderPasswordSetup = () => {
@@ -346,9 +191,7 @@ const App = () => {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (!error) {
         setIsSettingPassword(false);
-        showToast('Security credentials updated. Welcome to the Syndicate.');
-      } else {
-        showToast(error.message, 'error');
+        showToast('Welcome to the Syndicate family.');
       }
       setUpdating(false);
     };
@@ -358,33 +201,31 @@ const App = () => {
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-bg-surface border border-white/10 p-8 rounded-[2.5rem] shadow-2xl"
+          className="w-full max-w-md bg-white border border-black/[0.03] p-10 rounded-[3rem] shadow-2xl"
         >
           <div className="flex justify-center mb-6">
             <div className="p-4 bg-primary/10 rounded-2xl">
               <Lock className="text-primary w-10 h-10" />
             </div>
           </div>
-          <h2 className="text-2xl font-black uppercase tracking-tighter text-center mb-2">Protocol: Password Setup</h2>
-          <p className="text-white/40 text-xs text-center mb-8 uppercase tracking-widest">Establish your permanent security credentials</p>
+          <h2 className="text-2xl font-extrabold tracking-tight text-center mb-2">Password Setup</h2>
+          <p className="text-text-muted text-xs text-center mb-8 uppercase tracking-widest font-bold">Create your login credentials</p>
           
           <form onSubmit={handleUpdatePassword} className="space-y-4">
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 w-5 h-5" />
-              <input
-                type="password"
-                placeholder="New Security Key"
-                required
-                className="w-full pl-12 pr-4 py-4 bg-black/40 border border-white/5 rounded-2xl outline-none focus:ring-2 focus:ring-primary/50 text-sm"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </div>
+            <input
+              type="password"
+              placeholder="New Password"
+              className="w-full px-6 py-4 bg-black/[0.03] border border-transparent rounded-2xl outline-none focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all text-sm font-medium"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+            />
             <button
+              type="submit"
               disabled={updating}
-              className="w-full py-4 bg-primary text-black font-black uppercase tracking-widest rounded-2xl hover:shadow-[0_0_30px_rgba(0,242,255,0.3)] transition-all flex items-center justify-center gap-2 text-xs"
+              className="w-full py-5 bg-black text-white font-bold rounded-2xl hover:bg-primary transition-all flex items-center justify-center gap-3 text-sm shadow-xl"
             >
-              {updating ? <Loader2 className="animate-spin w-5 h-5" /> : 'Finalize Credentials'}
+              Set Password
             </button>
           </form>
         </motion.div>
@@ -392,39 +233,32 @@ const App = () => {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-bg-deep flex items-center justify-center">
-        <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity }}>
-          <Handshake className="text-primary w-12 h-12" />
-        </motion.div>
-      </div>
-    );
-  }
-
+  if (loading) return <div className="min-h-screen bg-bg-deep flex items-center justify-center"><Heart className="text-primary w-12 h-12 animate-pulse" /></div>;
   if (!session) return <Auth />;
   if (isSettingPassword) return renderPasswordSetup();
 
   return (
-    <div className="min-h-screen bg-bg-deep text-white selection:bg-primary selection:text-black">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-bg-deep/80 backdrop-blur-xl border-b border-white/5">
-        <div className="px-6 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-bg-deep text-text-main selection:bg-primary selection:text-white">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/70 backdrop-blur-xl border-b border-black/[0.03]">
+        <div className="px-6 h-18 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Handshake className="text-primary w-5 h-5" />
-            <span className="font-black uppercase tracking-tighter text-lg">Syndicate</span>
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <Heart className="text-primary w-5 h-5 fill-primary/20" />
+            </div>
+            <div>
+              <span className="font-extrabold text-lg tracking-tight block leading-none">Syndicate</span>
+              <span className="text-[10px] text-text-muted font-medium uppercase tracking-widest">Memory Sharing</span>
+            </div>
           </div>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-black shadow-[0_0_15px_rgba(0,242,255,0.3)]"
-          >
-            <Plus size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setActiveTab('settings')} className="w-10 h-10 rounded-full bg-black/5 flex items-center justify-center text-text-main overflow-hidden border border-black/[0.03]">
+              <SyndicateAvatar src={session?.user?.user_metadata?.avatar_url} name={session?.user?.email} size={40} variant="beam" />
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="pt-20 px-6 max-w-lg mx-auto">
+      <main className="pt-24 px-6 max-w-lg mx-auto">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -433,51 +267,94 @@ const App = () => {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'home' && renderHome()}
-            {activeTab === 'gallery' && renderGallery()}
-            {activeTab === 'wall' && renderWall()}
-            {activeTab === 'settings' && renderSettings()}
+            {activeTab === 'home' && <Home memories={memories} />}
+            {activeTab === 'gallery' && (
+              <Gallery 
+                memories={memories} 
+                session={session} 
+                setSelectedImageIndex={setSelectedImageIndex} 
+                handleDeleteMemory={handleDeleteMemory}
+                galleryFilter={galleryFilter}
+                setGalleryFilter={setGalleryFilter}
+                isAssetVideo={isAssetVideo}
+                hasMore={hasMoreMemories}
+                loadMore={loadMoreMemories}
+              />
+            )}
+            {activeTab === 'wall' && (
+              <Wall 
+                messages={messages} 
+                session={session} 
+                handleNewMessage={handleNewMessage} 
+                handleDeleteMessage={handleDeleteMessage} 
+              />
+            )}
+            {activeTab === 'settings' && (
+              <Profile 
+                session={session} 
+                memories={memories} 
+                messages={messages} 
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
 
-      {/* Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-bg-surface/80 backdrop-blur-2xl border-t border-white/5 pb-8 pt-4 px-6">
-        <div className="max-w-lg mx-auto flex justify-between items-center px-4">
+      <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md">
+        <div className="glass-panel card-shadow rounded-[2.5rem] px-8 py-4 flex justify-between items-center relative">
           {[
-            { id: 'gallery', icon: ImageIcon, label: 'Gallery' },
-            { id: 'home', icon: Handshake, label: 'Home' },
-            { id: 'wall', icon: Menu, label: 'Wall' },
+            { id: 'gallery', icon: ImageIcon, label: 'Archive' },
+            { id: 'home', icon: Heart, label: 'Feed' },
+            { id: 'wall', icon: Menu, label: 'Chat' },
             { id: 'settings', icon: User, label: 'Profile' }
           ].map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === item.id ? 'text-primary' : 'text-white/20'}`}
+              className={`flex flex-col items-center gap-1 transition-all ${activeTab === item.id ? 'text-primary' : 'text-text-muted hover:text-text-main'}`}
             >
-              <item.icon size={20} />
-              <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
+              <item.icon size={24} className={activeTab === item.id ? 'fill-primary/10' : ''} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
             </button>
           ))}
+
+          <button 
+            onClick={() => setShowUpload(true)}
+            className="absolute left-1/2 -translate-x-1/2 -top-6 w-16 h-16 bg-black text-white rounded-[1.8rem] flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all"
+          >
+            <Plus size={32} />
+          </button>
         </div>
       </nav>
 
-      {isModalOpen && <Upload onClose={() => setIsModalOpen(false)} onUploadSuccess={fetchMemories} />}
-      
-      {/* Lightbox / Swipe Gallery */}
+      <AnimatePresence>
+        {showUpload && (
+          <Upload 
+            onUploadSuccess={() => {
+              fetchMemories(session.user.id);
+              setShowUpload(false);
+            }} 
+            onClose={() => setShowUpload(false)} 
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {selectedImageIndex !== null && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black flex items-center justify-center touch-none"
+            className="fixed inset-0 z-[100] bg-white flex items-center justify-center touch-none"
           >
+            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none z-[110]" />
+            <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none z-[110]" />
+
             <button 
               onClick={() => setSelectedImageIndex(null)}
-              className="absolute top-12 right-6 z-[110] w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md"
+              className="absolute top-12 right-6 z-[120] w-12 h-12 bg-black/5 hover:bg-black/10 rounded-full flex items-center justify-center text-text-main transition-colors"
             >
-              <Plus className="rotate-45" size={24} />
+              <X size={24} />
             </button>
 
             <motion.div 
@@ -492,46 +369,35 @@ const App = () => {
                 }
               }}
               key={selectedImageIndex}
-              initial={{ x: 300, opacity: 0 }}
+              initial={{ x: 100, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -300, opacity: 0 }}
+              exit={{ x: -100, opacity: 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="w-full h-full flex items-center justify-center p-4"
+              className="w-full h-full flex items-center justify-center p-4 relative z-[105]"
             >
-              <div className="relative w-full max-w-lg aspect-[3/4]">
+              <div className="relative w-full max-w-lg">
                 {isAssetVideo(memories[selectedImageIndex].image_url) ? (
-                  <video 
-                    src={memories[selectedImageIndex].image_url} 
-                    className="w-full h-full object-contain rounded-2xl" 
-                    controls 
-                    autoPlay 
-                    playsInline 
-                  />
+                  <video src={memories[selectedImageIndex].image_url} className="w-full h-auto max-h-[70vh] object-contain rounded-3xl shadow-2xl" controls autoPlay playsInline />
                 ) : (
-                  <img 
-                    src={memories[selectedImageIndex].image_url} 
-                    className="w-full h-full object-contain rounded-2xl"
-                    alt="Full view"
-                  />
+                  <img src={memories[selectedImageIndex].image_url} className="w-full h-auto max-h-[70vh] object-contain rounded-3xl shadow-2xl" alt="Full view" />
                 )}
-                <div className="absolute bottom-[-60px] left-0 right-0 text-center">
-                  <p className="text-white font-black uppercase tracking-widest text-sm mb-1">
-                    {memories[selectedImageIndex].friend_name}
-                  </p>
-                  <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest">
-                    {formatDistanceToNow(new Date(memories[selectedImageIndex].created_at))} ago
-                  </p>
+                
+                <div className="mt-8 space-y-2 px-4">
+                  <div className="flex items-center gap-3">
+                    <SyndicateAvatar name={memories[selectedImageIndex].friend_name} size={32} variant="beam" />
+                    <div>
+                      <p className="text-sm font-extrabold tracking-tight">{memories[selectedImageIndex].friend_name || 'General'}</p>
+                      <p className="text-text-muted text-[10px] font-bold uppercase tracking-widest">{formatDistanceToNow(new Date(memories[selectedImageIndex].created_at))} ago</p>
+                    </div>
+                  </div>
+                  <p className="text-text-main text-lg font-medium leading-relaxed italic">"{memories[selectedImageIndex].caption || 'No caption'}"</p>
                 </div>
               </div>
             </motion.div>
 
-            {/* Pagination Indicator */}
-            <div className="absolute bottom-12 left-0 right-0 flex justify-center gap-2">
+            <div className="absolute bottom-16 left-0 right-0 flex justify-center gap-2 z-[120]">
               {memories.map((_, i) => (
-                <div 
-                  key={i} 
-                  className={`h-1 rounded-full transition-all duration-300 ${i === selectedImageIndex ? 'w-8 bg-primary' : 'w-2 bg-white/20'}`} 
-                />
+                <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === selectedImageIndex ? 'w-8 bg-primary' : 'w-2 bg-black/10'}`} />
               ))}
             </div>
           </motion.div>
@@ -539,7 +405,7 @@ const App = () => {
       </AnimatePresence>
 
       {toast && (
-        <motion.div initial={{ y: 50 }} animate={{ y: 0 }} className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-primary px-6 py-3 rounded-full text-black text-xs font-black uppercase">
+        <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }} className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-black text-white px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-2xl z-[60]">
           {toast.message}
         </motion.div>
       )}
@@ -548,4 +414,3 @@ const App = () => {
 };
 
 export default App;
-
