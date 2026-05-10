@@ -18,6 +18,16 @@ import {
 import { supabase } from '../lib/supabase';
 import SyndicateAvatar from './SyndicateAvatar';
 import { formatDistanceToNow } from 'date-fns';
+import useAppStore from '../store/useAppStore';
+
+const safeFormatDistance = (dateStr) => {
+  if (!dateStr) return 'Just now';
+  try {
+    return formatDistanceToNow(new Date(dateStr));
+  } catch (e) {
+    return 'Just now';
+  }
+};
 
 const categories = [
   { id: 'all', label: 'All Intel', icon: Globe, color: 'bg-black' },
@@ -27,7 +37,8 @@ const categories = [
   { id: 'tech', label: 'Ops/Tech', icon: TrendingUp, color: 'bg-amber-500' }
 ];
 
-const Discussions = ({ session }) => {
+const Discussions = () => {
+  const { session } = useAppStore();
   const [activeCategory, setActiveCategory] = useState('all');
   const [discussions, setDiscussions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -171,7 +182,7 @@ const Discussions = ({ session }) => {
                       {thread.category}
                     </span>
                     <span className="text-[10px] text-text-muted font-bold tracking-widest uppercase">
-                      Posted by {thread.profiles?.full_name} • {formatDistanceToNow(new Date(thread.created_at))} ago
+                      Posted by {thread.profiles?.full_name || 'Anonymous'} • {safeFormatDistance(thread.created_at)} ago
                     </span>
                   </div>
                   
@@ -216,8 +227,8 @@ const Discussions = ({ session }) => {
         <div className="flex items-center gap-3">
           <SyndicateAvatar src={selectedDiscussion.profiles?.avatar_url} name={selectedDiscussion.profiles?.full_name} size={40} />
           <div>
-            <p className="text-sm font-bold">{selectedDiscussion.profiles?.full_name}</p>
-            <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">{formatDistanceToNow(new Date(selectedDiscussion.created_at))} ago</p>
+            <p className="text-sm font-bold">{selectedDiscussion.profiles?.full_name || 'Anonymous'}</p>
+            <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">{safeFormatDistance(selectedDiscussion.created_at)} ago</p>
           </div>
           <span className={`ml-auto px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white ${categories.find(c => c.id === selectedDiscussion.category)?.color || 'bg-black'}`}>
             {selectedDiscussion.category}
@@ -260,8 +271,8 @@ const Discussions = ({ session }) => {
               <SyndicateAvatar src={comment.profiles?.avatar_url} name={comment.profiles?.full_name} size={32} />
               <div className="space-y-1 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-extrabold">{comment.profiles?.full_name}</span>
-                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-widest">{formatDistanceToNow(new Date(comment.created_at))} ago</span>
+                  <span className="text-xs font-extrabold">{comment.profiles?.full_name || 'Anonymous'}</span>
+                  <span className="text-[10px] text-text-muted font-bold uppercase tracking-widest">{safeFormatDistance(comment.created_at)} ago</span>
                 </div>
                 <p className="text-sm text-text-main/80 font-medium leading-relaxed">{comment.content}</p>
               </div>

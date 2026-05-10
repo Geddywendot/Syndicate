@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Trash2 } from 'lucide-react';
 import { optimizeCloudinaryUrl } from '../lib/cloudinary';
+import useAppStore from '../store/useAppStore';
 
-const Gallery = ({ memories, session, setSelectedImageIndex, handleDeleteMemory, galleryFilter, setGalleryFilter, isAssetVideo, hasMore, loadMore }) => {
+const Gallery = ({ memories, setSelectedImageIndex, handleDeleteMemory, galleryFilter, setGalleryFilter, isAssetVideo, hasMore, loadMore }) => {
+  const { session } = useAppStore();
   const filteredMemories = galleryFilter === 'All' 
     ? memories 
     : memories.filter(m => {
@@ -20,8 +22,8 @@ const Gallery = ({ memories, session, setSelectedImageIndex, handleDeleteMemory,
     <div className="space-y-8 pb-32">
       <header className="space-y-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-extrabold tracking-tight">Archive</h1>
-          <p className="text-text-muted text-sm font-medium">Browse your collective history</p>
+          <h1 className="text-3xl font-extrabold tracking-tight">Your Archive</h1>
+          <p className="text-text-muted text-sm font-medium">Your private vault of personal memories</p>
         </div>
         
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
