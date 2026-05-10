@@ -4,8 +4,8 @@ import { ImageIcon, Heart } from 'lucide-react';
 
 const Home = ({ memories }) => {
   const grouped = memories.reduce((acc, memory) => {
-    // Priority: Group Name (if we had it) > Friend Name > General
-    const name = memory.friend_name || 'General';
+    const date = new Date(memory.created_at);
+    const name = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     if (!acc[name]) acc[name] = [];
     acc[name].push(memory);
     return acc;

@@ -59,23 +59,6 @@ const App = () => {
         fetchMemories(session.user.id, 0, true);
         fetchMessages();
         fetchNotifications(session.user.id);
-        
-        // Setup notification subscription
-        const channel = supabase
-          .channel('notifications-live')
-          .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'notifications',
-            filter: `user_id=eq.${session.user.id}`
-          }, () => {
-            fetchNotifications(session.user.id);
-          })
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(channel);
-        };
       } else {
         setMemories([]);
         setMessages([]);
@@ -84,6 +67,27 @@ const App = () => {
     };
 
     handleAuth();
+
+    let channel;
+    if (session?.user?.id) {
+      channel = supabase
+        .channel(`notifications-${session.user.id}`)
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'notifications',
+          filter: `user_id=eq.${session.user.id}`
+        }, () => {
+          fetchNotifications(session.user.id);
+        })
+        .subscribe();
+    }
+
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
@@ -282,11 +286,18 @@ const App = () => {
               <span className="text-[10px] text-text-muted font-medium uppercase tracking-widest">Memory Sharing</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setShowUpload(true)}
+              className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+            >
+              <Plus size={20} />
+            </button>
             <button onClick={() => setActiveTab('settings')} className="w-10 h-10 rounded-full bg-black/5 flex items-center justify-center text-text-main overflow-hidden border border-black/[0.03]">
               <SyndicateAvatar src={session?.user?.user_metadata?.avatar_url} name={session?.user?.email} size={40} variant="beam" />
             </button>
           </div>
+
         </div>
       </header>
 
@@ -329,7 +340,7 @@ const App = () => {
       </main>
 
       <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md">
-        <div className="glass-panel card-shadow rounded-[2.5rem] pl-28 pr-8 py-4 flex justify-between items-center relative">
+        <div className="glass-panel card-shadow rounded-[2.5rem] px-8 py-4 flex justify-between items-center relative">
           {[
             { id: 'gallery', icon: ImageIcon, label: 'Archive' },
             { id: 'home', icon: Heart, label: 'Feed' },
@@ -352,13 +363,6 @@ const App = () => {
               )}
             </button>
           ))}
-
-          <button 
-            onClick={() => setShowUpload(true)}
-            className="absolute left-6 -top-6 w-16 h-16 bg-black text-white rounded-[1.8rem] flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all z-50"
-          >
-            <Plus size={32} />
-          </button>
         </div>
       </nav>
 
@@ -366,7 +370,7 @@ const App = () => {
         {showUpload && (
           <Upload 
             onUploadSuccess={() => {
-              fetchMemories(session.user.id);
+              fetchMemories(session.user.id, 0, true);
               setShowUpload(false);
             }} 
             onClose={() => setShowUpload(false)} 

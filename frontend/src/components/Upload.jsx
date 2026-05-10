@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -19,7 +19,6 @@ const Upload = ({ onUploadSuccess, onClose }) => {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [caption, setCaption] = useState('');
-  const [friendName, setFriendName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState('idle'); 
   const [error, setError] = useState(null);
@@ -69,7 +68,7 @@ const Upload = ({ onUploadSuccess, onClose }) => {
       }
 
       // Strict MIME type validation
-      const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
       const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
       
       const isVideo = file.type.startsWith('video');
@@ -168,7 +167,6 @@ const Upload = ({ onUploadSuccess, onClose }) => {
           image_url: imageUrl,
           caption: caption,
           uploaded_by: user?.id,
-          friend_name: friendName,
           group_id: selectedGroupId || null
         }
       ]);
@@ -250,25 +248,17 @@ const Upload = ({ onUploadSuccess, onClose }) => {
                   </div>
                 </div>
               )}
-              <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*" onChange={handleFileChange} />
+              <label htmlFor="mediaFile" className="sr-only">Select Media File</label>
+              <input id="mediaFile" name="mediaFile" ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*" onChange={handleFileChange} />
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <div className="relative group">
-                <User className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Who's in this? (Friend Name)"
-                  className="w-full pl-14 pr-6 py-5 bg-white border border-black/[0.03] rounded-2xl outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all font-medium text-sm card-shadow"
-                  value={friendName}
-                  onChange={(e) => setFriendName(e.target.value)}
-                />
-              </div>
-
-              {groups.length > 0 && (
+            <div className="grid grid-cols-1 gap-4">              {groups.length > 0 && (
                 <div className="relative group">
                   <Shield className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+                  <label htmlFor="groupId" className="sr-only">Group</label>
                   <select
+                    id="groupId"
+                    name="groupId"
                     className="w-full pl-14 pr-6 py-5 bg-white border border-black/[0.03] rounded-2xl outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all font-medium text-sm card-shadow appearance-none"
                     value={selectedGroupId}
                     onChange={(e) => setSelectedGroupId(e.target.value)}
@@ -283,7 +273,10 @@ const Upload = ({ onUploadSuccess, onClose }) => {
 
               <div className="relative group">
                 <Hash className="absolute left-5 top-6 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+                <label htmlFor="storyCaption" className="sr-only">Story Caption</label>
                 <textarea
+                  id="storyCaption"
+                  name="storyCaption"
                   placeholder="Tell the story..."
                   className="w-full pl-14 pr-6 py-6 bg-white border border-black/[0.03] rounded-2xl outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all font-medium text-sm card-shadow min-h-[120px] resize-none"
                   value={caption}

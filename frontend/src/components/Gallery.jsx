@@ -6,9 +6,15 @@ import { optimizeCloudinaryUrl } from '../lib/cloudinary';
 const Gallery = ({ memories, session, setSelectedImageIndex, handleDeleteMemory, galleryFilter, setGalleryFilter, isAssetVideo, hasMore, loadMore }) => {
   const filteredMemories = galleryFilter === 'All' 
     ? memories 
-    : memories.filter(m => (m.friend_name || 'General') === galleryFilter);
+    : memories.filter(m => {
+        const date = new Date(m.created_at);
+        return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) === galleryFilter;
+      });
 
-  const categories = ['All', ...new Set(memories.map(m => m.friend_name || 'General'))];
+  const categories = ['All', ...new Set(memories.map(m => {
+    const date = new Date(m.created_at);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }))];
 
   return (
     <div className="space-y-8 pb-32">
@@ -54,7 +60,7 @@ const Gallery = ({ memories, session, setSelectedImageIndex, handleDeleteMemory,
             )}
             
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">
-              <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest">{item.friend_name || 'General'}</p>
+              <p className="text-[10px] text-white/60 font-bold uppercase tracking-widest">{new Date(item.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
               <p className="text-xs text-white font-bold truncate">{item.caption || 'No caption'}</p>
             </div>
 

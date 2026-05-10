@@ -114,14 +114,17 @@ const Profile = ({ session, memories, messages }) => {
                       <Loader2 className="text-primary animate-spin" size={24} />
                     </div>
                   )}
-                  <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                  <label htmlFor="avatarUpload" className="sr-only">Upload Avatar</label>
+                  <input id="avatarUpload" name="avatar" ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
                 </div>
                 <p className="text-[10px] text-text-muted font-bold uppercase tracking-widest">Click to change picture</p>
               </div>
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted px-2">Full Name</label>
+                  <label htmlFor="editFullName" className="text-[10px] font-bold uppercase tracking-widest text-text-muted px-2">Full Name</label>
                   <input 
+                    id="editFullName"
+                    name="fullName"
                     type="text" 
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
@@ -130,8 +133,10 @@ const Profile = ({ session, memories, messages }) => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted px-2">Email (Read Only)</label>
+                  <label htmlFor="editEmail" className="text-[10px] font-bold uppercase tracking-widest text-text-muted px-2">Email (Read Only)</label>
                   <input 
+                    id="editEmail"
+                    name="email"
                     type="email" 
                     value={session?.user?.email}
                     disabled

@@ -122,7 +122,10 @@ const Auth = () => {
               >
                 <div className="relative group">
                   <User className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+                  <label htmlFor="fullName" className="sr-only">Full Name</label>
                   <input
+                    id="fullName"
+                    name="fullName"
                     type="text"
                     placeholder="Full Name"
                     required
@@ -138,7 +141,10 @@ const Auth = () => {
           <div className="space-y-1">
             <div className="relative group">
               <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+              <label htmlFor="emailAddress" className="sr-only">Email Address</label>
               <input
+                id="emailAddress"
+                name="email"
                 type="email"
                 placeholder="Email Address"
                 required
@@ -152,7 +158,10 @@ const Auth = () => {
           <div className="space-y-1">
             <div className="relative group">
               <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors w-5 h-5" />
+              <label htmlFor="userPassword" className="sr-only">Password</label>
               <input
+                id="userPassword"
+                name="password"
                 type="password"
                 placeholder="Password"
                 required
