@@ -15,8 +15,12 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SyndicateAvatar from './SyndicateAvatar';
+import PrivateChat from './PrivateChat';
+import GroupChat from './GroupChat';
+import useAppStore from '../store/useAppStore';
 
-const SyndicateNetwork = ({ session }) => {
+const SyndicateNetwork = () => {
+  const { session, setUnreadCount } = useAppStore();
   const [activeSubTab, setActiveSubTab] = useState('friends'); // 'friends', 'groups', 'requests'
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -27,6 +31,8 @@ const SyndicateNetwork = ({ session }) => {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [suggestions, setSuggestions] = useState([]);
+  const [activeChatFriend, setActiveChatFriend] = useState(null);
+  const [activeGroupChat, setActiveGroupChat] = useState(null);
 
   useEffect(() => {
     if (session) {
@@ -47,12 +53,29 @@ const SyndicateNetwork = ({ session }) => {
 
   const fetchNetworkData = async () => {
     setLoading(true);
-    // Fetch friends (accepted follows)
-    const { data: followsData } = await supabase
+    // Fetch where user is the follower
+    const { data: followsData1 } = await supabase
       .from('follows')
       .select('*, profiles!follows_following_id_fkey(*)')
       .eq('follower_id', session.user.id)
       .eq('status', 'accepted');
+      
+    // Fetch where user is the following
+    const { data: followsData2 } = await supabase
+      .from('follows')
+      .select('*, profiles!follows_follower_id_fkey(*)')
+      .eq('following_id', session.user.id)
+      .eq('status', 'accepted');
+      
+    const allFriends = [...(followsData1 || []), ...(followsData2 || [])];
+    const uniqueFriends = [];
+    const seen = new Set();
+    allFriends.forEach(f => {
+      if (f.profiles && !seen.has(f.profiles.id)) {
+        seen.add(f.profiles.id);
+        uniqueFriends.push(f);
+      }
+    });
     
     // Fetch pending requests
     const { data: requestsData } = await supabase
@@ -67,12 +90,12 @@ const SyndicateNetwork = ({ session }) => {
       .select('*, groups(*)')
       .eq('user_id', session.user.id);
 
-    setFriends(followsData || []);
+    setFriends(uniqueFriends);
     setRequests(requestsData || []);
     setGroups(groupsData || []);
     
     // Calculate Suggestions
-    calculateSuggestions(followsData || []);
+    calculateSuggestions(uniqueFriends);
     setLoading(false);
   };
 
@@ -152,10 +175,25 @@ const SyndicateNetwork = ({ session }) => {
     setSuggestions(prev => prev.filter(u => u.id !== userId));
   };
 
-  const acceptRequest = async (requestId) => {
+  const acceptRequest = async (req) => {
     const { error } = await supabase
       .from('follows')
       .update({ status: 'accepted' })
+      .eq('id', req.id);
+    
+    if (!error) {
+      await supabase.from('notifications').insert([{
+        user_id: req.follower_id,
+        type: 'friend_request_accepted'
+      }]);
+      fetchNetworkData();
+    }
+  };
+
+  const declineRequest = async (requestId) => {
+    const { error } = await supabase
+      .from('follows')
+      .delete()
       .eq('id', requestId);
     
     if (!error) {
@@ -166,17 +204,21 @@ const SyndicateNetwork = ({ session }) => {
   const createGroup = async () => {
     if (!newGroupName.trim()) return;
 
-    const { data: group, error: groupError } = await supabase
-      .from('groups')
-      .insert([{ name: newGroupName, created_by: session.user.id }])
-      .select()
-      .single();
+    // Use Edge Function to bypass RLS and create group safely
+    const { data: group, error: groupError } = await supabase.functions.invoke('create-group', {
+      body: { 
+        name: newGroupName, 
+        created_by: session.user.id 
+      }
+    });
 
-    if (!groupError) {
-      await supabase
-        .from('group_members')
-        .insert([{ group_id: group.id, user_id: session.user.id }]);
-      
+    if (groupError) {
+      console.error('Failed to create group:', groupError);
+      alert('Failed to create group. Please make sure the edge function is deployed.');
+      return;
+    }
+
+    if (group) {
       setNewGroupName('');
       setShowCreateGroup(false);
       fetchNetworkData();
@@ -310,7 +352,10 @@ const SyndicateNetwork = ({ session }) => {
                       <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest">Connected</p>
                     </div>
                   </div>
-                  <button className="w-10 h-10 rounded-full bg-black/[0.03] flex items-center justify-center text-text-muted hover:bg-black/[0.05]">
+                  <button 
+                    onClick={() => setActiveChatFriend(follow)}
+                    className="w-10 h-10 rounded-full bg-black/[0.03] flex items-center justify-center text-text-muted hover:bg-black/[0.05]"
+                  >
                     <MessageSquare size={16} />
                   </button>
                 </div>
@@ -330,7 +375,11 @@ const SyndicateNetwork = ({ session }) => {
             </button>
             
             {groups.map(member => (
-              <div key={member.id} className="bg-white p-6 rounded-[2.5rem] border border-black/[0.03] card-shadow flex items-center justify-between group">
+              <div 
+                key={member.id} 
+                onClick={() => setActiveGroupChat(member.groups)}
+                className="bg-white p-6 rounded-[2.5rem] border border-black/[0.03] card-shadow flex items-center justify-between group cursor-pointer hover:bg-black/[0.02]"
+              >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-black/5 rounded-2xl flex items-center justify-center text-black/20 group-hover:bg-primary group-hover:text-white transition-all">
                     <Shield size={24} />
@@ -365,12 +414,15 @@ const SyndicateNetwork = ({ session }) => {
                   </div>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => acceptRequest(req.id)}
+                      onClick={() => acceptRequest(req)}
                       className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center shadow-lg shadow-green-500/20"
                     >
                       <Check size={18} />
                     </button>
-                    <button className="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-500/20">
+                    <button 
+                      onClick={() => declineRequest(req.id)}
+                      className="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-500/20"
+                    >
                       <X size={18} />
                     </button>
                   </div>
@@ -421,6 +473,26 @@ const SyndicateNetwork = ({ session }) => {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeChatFriend && (
+          <PrivateChat 
+            session={session} 
+            friend={activeChatFriend} 
+            onClose={() => setActiveChatFriend(null)} 
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeGroupChat && (
+          <GroupChat 
+            session={session} 
+            group={activeGroupChat} 
+            onClose={() => setActiveGroupChat(null)} 
+          />
         )}
       </AnimatePresence>
     </div>

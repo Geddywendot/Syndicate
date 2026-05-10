@@ -20,19 +20,18 @@ import Profile from './components/Profile';
 import SyndicateNetwork from './components/SyndicateNetwork';
 import SyndicateAvatar from './components/SyndicateAvatar';
 import { formatDistanceToNow } from 'date-fns';
+import useAppStore from './store/useAppStore';
 
 const App = () => {
-  const [session, setSession] = useState(null);
+  const { session, activeTab, unreadCount, setSession, setActiveTab, setUnreadCount } = useAppStore();
   const [loading, setLoading] = useState(true);
   const [memories, setMemories] = useState([]);
   const [messages, setMessages] = useState([]);
-  const [activeTab, setActiveTab] = useState('home');
   const [showUpload, setShowUpload] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(null);
   const [isSettingPassword, setIsSettingPassword] = useState(false);
   const [galleryFilter, setGalleryFilter] = useState('All');
   const [toast, setToast] = useState(null);
-  const [unreadCount, setUnreadCount] = useState(0);
 
   const isAssetVideo = (url) => url?.includes('/video/') || url?.endsWith('.mp4') || url?.endsWith('.mov');
 
@@ -83,12 +82,6 @@ const App = () => {
         .subscribe();
     }
 
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
-    };
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (event === 'SIGNED_IN' && session) {
@@ -96,16 +89,22 @@ const App = () => {
         fetchMemories(session.user.id, 0, true);
         fetchMessages();
       }
-      if (event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESH_FAILED' || event === 'USER_DELETED') {
         setMemories([]);
         setMessages([]);
+        setSession(null);
       }
       if (event === 'PASSWORD_RECOVERY') {
         setIsSettingPassword(true);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchMemories = async (userId, page = 0, reset = false) => {
@@ -122,12 +121,11 @@ const App = () => {
     const from = page * ITEMS_PER_PAGE;
     const to = from + ITEMS_PER_PAGE - 1;
 
-    // Visibility Query: (Own) OR (Followed & No Group) OR (In Group)
+    // Visibility Query: (Own) OR (In Group)
     let query = supabase.from('memories').select('*');
     
     const conditions = [`uploaded_by.eq.${userId}`];
     if (groupIds.length > 0) conditions.push(`group_id.in.(${groupIds.join(',')})`);
-    if (followingIds.length > 0) conditions.push(`and(uploaded_by.in.(${followingIds.join(',')}),group_id.is.null)`);
 
     query = query.or(conditions.join(','));
 
@@ -310,12 +308,11 @@ const App = () => {
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'home' && <Home memories={memories} />}
-            {activeTab === 'network' && <SyndicateNetwork session={session} />}
+            {activeTab === 'home' && <Home memories={memories.filter(m => m.uploaded_by !== session.user.id)} />}
+            {activeTab === 'network' && <SyndicateNetwork />}
             {activeTab === 'gallery' && (
               <Gallery 
-                memories={memories} 
-                session={session} 
+                memories={memories.filter(m => m.uploaded_by === session.user.id)} 
                 setSelectedImageIndex={setSelectedImageIndex} 
                 handleDeleteMemory={handleDeleteMemory}
                 galleryFilter={galleryFilter}
@@ -326,11 +323,10 @@ const App = () => {
               />
             )}
             {activeTab === 'wall' && (
-              <Discussions session={session} />
+              <Discussions />
             )}
             {activeTab === 'settings' && (
               <Profile 
-                session={session} 
                 memories={memories} 
                 messages={messages} 
               />

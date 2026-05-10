@@ -17,8 +17,10 @@ import {
 import SyndicateAvatar from './SyndicateAvatar';
 import { supabase } from '../lib/supabase';
 import imageCompression from 'browser-image-compression';
+import useAppStore from '../store/useAppStore';
 
-const Profile = ({ session, memories, messages }) => {
+const Profile = ({ memories, messages }) => {
+  const { session } = useAppStore();
   const [subPage, setSubPage] = useState(null); 
   const [fullName, setFullName] = useState(session?.user?.user_metadata?.full_name || '');
   const [avatarUrl, setAvatarUrl] = useState(session?.user?.user_metadata?.avatar_url || '');
@@ -68,11 +70,33 @@ const Profile = ({ session, memories, messages }) => {
 
       // Upload to Cloudinary
       const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
+      const apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY;
+      
+      if (!apiKey) {
+        throw new Error('VITE_CLOUDINARY_API_KEY is missing from environment variables');
+      }
+
+      const timestamp = Math.round(new Date().getTime() / 1000);
+      const paramsToSign = {
+        timestamp,
+      };
+
+      // Fetch signature from Edge Function
+      const { data: signData, error: signError } = await supabase.functions.invoke('cloudinary-sign', {
+        body: { paramsToSign }
+      });
+
+      if (signError || !signData?.signature) {
+        throw new Error('Failed to generate upload signature');
+      }
+
+      const { signature } = signData;
       
       const formData = new FormData();
       formData.append('file', compressedFile);
-      formData.append('upload_preset', uploadPreset);
+      formData.append('api_key', apiKey);
+      formData.append('timestamp', timestamp);
+      formData.append('signature', signature);
 
       const res = await fetch(
         `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,

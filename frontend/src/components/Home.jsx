@@ -14,8 +14,8 @@ const Home = ({ memories }) => {
   return (
     <div className="space-y-8 pb-32">
       <header className="space-y-1">
-        <h1 className="text-3xl font-extrabold tracking-tight">Your Collections</h1>
-        <p className="text-text-muted text-sm font-medium">Capture and relive every moment</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Friend Feed</h1>
+        <p className="text-text-muted text-sm font-medium">See what your inner circles are sharing</p>
       </header>
 
       {Object.entries(grouped).length === 0 ? (
@@ -34,8 +34,8 @@ const Home = ({ memories }) => {
             </div>
           </div>
           <div className="space-y-2">
-            <h3 className="text-xl font-bold">It starts with a collection</h3>
-            <p className="text-text-muted text-sm">Create one to start sharing memories</p>
+            <h3 className="text-xl font-bold">Your feed is quiet</h3>
+            <p className="text-text-muted text-sm">Join groups or follow friends to see their shared moments</p>
           </div>
         </div>
       ) : (

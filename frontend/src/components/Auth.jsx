@@ -49,6 +49,7 @@ const Auth = () => {
           console.error('Auth Error:', error);
           return;
         }
+        setSuccess('Login successful! Accessing space...');
       }
     } catch (err) {
       if (err.message.includes('Email not confirmed')) {

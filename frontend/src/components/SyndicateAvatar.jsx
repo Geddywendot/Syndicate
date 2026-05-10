@@ -3,6 +3,8 @@ import Avatar from "boring-avatars";
 import { optimizeCloudinaryUrl } from '../lib/cloudinary';
 
 const SyndicateAvatar = ({ src, name, size = 40, variant = "beam", className = "" }) => {
+  const safeName = name || "Unknown User";
+
   if (src) {
     const optimizedSrc = optimizeCloudinaryUrl(src, { 
       width: size * 2, // Double for retina displays
@@ -13,7 +15,7 @@ const SyndicateAvatar = ({ src, name, size = 40, variant = "beam", className = "
     return (
       <img 
         src={optimizedSrc} 
-        alt={name} 
+        alt={safeName} 
         className={`rounded-full object-cover ${className}`} 
         style={{ width: size, height: size }}
         loading="lazy"
@@ -22,7 +24,7 @@ const SyndicateAvatar = ({ src, name, size = 40, variant = "beam", className = "
   }
   return (
     <div className={className}>
-      <Avatar size={size} name={name} variant={variant} />
+      <Avatar size={size} name={safeName} variant={variant} />
     </div>
   );
 };

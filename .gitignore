@@ -10,13 +10,60 @@ frontend/dist/
 .env
 .env.local
 .env.*.local
-frontend/.env
-frontend/.env.local
-frontend/.env.*.local
+**/.env
+**/.env.local
+**/.env.*.local
 
 # IDE and OS files
 .vscode/
 .idea/
 .DS_Store
 *.log
+
+# Project Planning
+production_roadmap.txt
 inspo/
+
+# Database / SQL files
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+*.s3db
+*.sl3
+database.yml
+schema.rb
+supabase/.temp/
+supabase/db/
+supabase/backups/
+
+# System info / Secrets / Debugging
+*.pem
+*.key
+*.cer
+*.crt
+*.p12
+*.pfx
+secrets.json
+config/database.yml
+config/secrets.yml
+nohup.out
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+.stylelintcache
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Supabase local config
+.supabase/
+
+# Scratch and test scripts
+test_*.js
+scratch/
+brain/

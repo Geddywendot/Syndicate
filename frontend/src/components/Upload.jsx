@@ -112,9 +112,29 @@ const Upload = ({ onUploadSuccess, onClose }) => {
       setStatus('uploading');
       
       const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'ml_default';
+      const apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY;
       
+      if (!apiKey) {
+        throw new Error('VITE_CLOUDINARY_API_KEY is missing from environment variables');
+      }
+
       let uploadResult;
+      
+      const timestamp = Math.round(new Date().getTime() / 1000);
+      const paramsToSign = {
+        timestamp,
+      };
+
+      // Fetch signature from Edge Function
+      const { data: signData, error: signError } = await supabase.functions.invoke('cloudinary-sign', {
+        body: { paramsToSign }
+      });
+
+      if (signError || !signData?.signature) {
+        throw new Error('Failed to generate upload signature');
+      }
+
+      const { signature } = signData;
 
       if (isVideo && fileToUpload.size > 5 * 1024 * 1024) {
         const chunkSize = 5 * 1024 * 1024;
@@ -128,8 +148,9 @@ const Upload = ({ onUploadSuccess, onClose }) => {
           
           const formData = new FormData();
           formData.append('file', chunk);
-          formData.append('upload_preset', uploadPreset);
-          formData.append('timestamp', (Date.now() / 1000) | 0);
+          formData.append('api_key', apiKey);
+          formData.append('timestamp', timestamp);
+          formData.append('signature', signature);
 
           const res = await fetch(
             `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
@@ -149,7 +170,9 @@ const Upload = ({ onUploadSuccess, onClose }) => {
       } else {
         const formData = new FormData();
         formData.append('file', fileToUpload);
-        formData.append('upload_preset', uploadPreset);
+        formData.append('api_key', apiKey);
+        formData.append('timestamp', timestamp);
+        formData.append('signature', signature);
 
         const res = await fetch(
           `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
