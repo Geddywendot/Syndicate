@@ -7,6 +7,7 @@ import {
   User,
   Plus,
   Lock,
+  Users,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,8 +15,9 @@ import Auth from './components/Auth';
 import Upload from './components/Upload';
 import Home from './components/Home';
 import Gallery from './components/Gallery';
-import Wall from './components/Wall';
+import Discussions from './components/Discussions';
 import Profile from './components/Profile';
+import SyndicateNetwork from './components/SyndicateNetwork';
 import SyndicateAvatar from './components/SyndicateAvatar';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -30,6 +32,7 @@ const App = () => {
   const [isSettingPassword, setIsSettingPassword] = useState(false);
   const [galleryFilter, setGalleryFilter] = useState('All');
   const [toast, setToast] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const isAssetVideo = (url) => url?.includes('/video/') || url?.endsWith('.mp4') || url?.endsWith('.mov');
 
@@ -55,9 +58,28 @@ const App = () => {
         setMemoriesPage(0);
         fetchMemories(session.user.id, 0, true);
         fetchMessages();
+        fetchNotifications(session.user.id);
+        
+        // Setup notification subscription
+        const channel = supabase
+          .channel('notifications-live')
+          .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'notifications',
+            filter: `user_id=eq.${session.user.id}`
+          }, () => {
+            fetchNotifications(session.user.id);
+          })
+          .subscribe();
+
+        return () => {
+          supabase.removeChannel(channel);
+        };
       } else {
         setMemories([]);
         setMessages([]);
+        setUnreadCount(0);
       }
     };
 
@@ -134,6 +156,16 @@ const App = () => {
       .order('created_at', { ascending: false })
       .limit(50); // Scalability: limit messages
     if (!error) setMessages(data || []);
+  };
+
+  const fetchNotifications = async (userId) => {
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+    
+    if (!error) setUnreadCount(count || 0);
   };
 
   const handleNewMessage = async (text) => {
@@ -268,6 +300,7 @@ const App = () => {
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'home' && <Home memories={memories} />}
+            {activeTab === 'network' && <SyndicateNetwork session={session} />}
             {activeTab === 'gallery' && (
               <Gallery 
                 memories={memories} 
@@ -282,12 +315,7 @@ const App = () => {
               />
             )}
             {activeTab === 'wall' && (
-              <Wall 
-                messages={messages} 
-                session={session} 
-                handleNewMessage={handleNewMessage} 
-                handleDeleteMessage={handleDeleteMessage} 
-              />
+              <Discussions session={session} />
             )}
             {activeTab === 'settings' && (
               <Profile 
@@ -301,26 +329,33 @@ const App = () => {
       </main>
 
       <nav className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md">
-        <div className="glass-panel card-shadow rounded-[2.5rem] px-8 py-4 flex justify-between items-center relative">
+        <div className="glass-panel card-shadow rounded-[2.5rem] pl-28 pr-8 py-4 flex justify-between items-center relative">
           {[
             { id: 'gallery', icon: ImageIcon, label: 'Archive' },
             { id: 'home', icon: Heart, label: 'Feed' },
-            { id: 'wall', icon: Menu, label: 'Chat' },
+            { id: 'network', icon: Users, label: 'Network' },
+            { id: 'wall', icon: Menu, label: 'Briefing' },
             { id: 'settings', icon: User, label: 'Profile' }
           ].map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center gap-1 transition-all ${activeTab === item.id ? 'text-primary' : 'text-text-muted hover:text-text-main'}`}
+              className={`flex flex-col items-center gap-1 transition-all relative ${activeTab === item.id ? 'text-primary' : 'text-text-muted hover:text-text-main'}`}
             >
               <item.icon size={24} className={activeTab === item.id ? 'fill-primary/10' : ''} />
               <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
+              
+              {item.id === 'network' && unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
             </button>
           ))}
 
           <button 
             onClick={() => setShowUpload(true)}
-            className="absolute left-1/2 -translate-x-1/2 -top-6 w-16 h-16 bg-black text-white rounded-[1.8rem] flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all"
+            className="absolute left-6 -top-6 w-16 h-16 bg-black text-white rounded-[1.8rem] flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all z-50"
           >
             <Plus size={32} />
           </button>

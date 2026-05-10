@@ -47,6 +47,17 @@ const Profile = ({ session, memories, messages }) => {
 
     setUploadingAvatar(true);
     try {
+      // Strict validation for avatars
+      const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!file.type.startsWith('image/') || !allowedImageTypes.includes(file.type)) {
+        alert('Invalid image format. Use JPEG, PNG, or WEBP.');
+        throw new Error('Invalid image format. Use JPEG, PNG, or WEBP.');
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Avatar image must be under 5MB.');
+        throw new Error('Avatar image must be under 5MB.');
+      }
+
       // Compress image
       const options = {
         maxSizeMB: 1,

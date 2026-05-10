@@ -32,21 +32,30 @@ const Auth = () => {
           }
         });
         if (error) throw error;
-        setSuccess('Account created! You can now log in.');
+        setSuccess('Check your email to confirm your account!');
         setIsRegistering(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
         });
+        
         if (error) {
-          console.error('Supabase Auth Error:', error);
-          throw error;
+          if (error.message.includes('Email not confirmed')) {
+            setError('Please confirm your email address first. Check your inbox!');
+          } else {
+            setError(error.message);
+          }
+          console.error('Auth Error:', error);
+          return;
         }
       }
     } catch (err) {
-      setError(err.message);
-      console.error('Catch Auth Error:', err);
+      if (err.message.includes('Email not confirmed')) {
+        setError('Check your email! You need to confirm your account before logging in.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
