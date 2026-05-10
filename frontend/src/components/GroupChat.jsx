@@ -76,6 +76,15 @@ const GroupChat = ({ session, group, onClose }) => {
   };
 
   const fetchFriendsToInvite = async () => {
+    // Refresh group members first to ensure filter is accurate
+    const { data: memberData } = await supabase
+      .from('group_members')
+      .select('user_id')
+      .eq('group_id', group.id);
+    
+    const currentMemberIds = memberData?.map(m => m.user_id) || [];
+    setGroupMembers(currentMemberIds);
+
     const { data: followsData1 } = await supabase
       .from('follows')
       .select('*, profiles!follows_following_id_fkey(*)')
@@ -97,7 +106,7 @@ const GroupChat = ({ session, group, onClose }) => {
         uniqueFriends.push(f);
       }
     });
-    setFriends(uniqueFriends.filter(f => !groupMembers.includes(f.profiles.id)));
+    setFriends(uniqueFriends.filter(f => !currentMemberIds.includes(f.profiles.id)));
   };
 
   const handleInvite = async (userId) => {

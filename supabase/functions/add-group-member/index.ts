@@ -40,9 +40,7 @@ serve(async (req: Request) => {
       .insert([{ group_id, user_id }])
 
     if (memberError) {
-      if (memberError.code === '23505') {
-        throw new Error('User is already a member')
-      }
+      if (memberError.code === '23505') throw new Error('User is already a member')
       throw memberError
     }
 
