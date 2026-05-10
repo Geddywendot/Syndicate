@@ -64,7 +64,29 @@ const Upload = ({ onUploadSuccess, onClose }) => {
     setError(null);
 
     try {
+      if (caption.length > 1000) {
+        throw new Error('Caption must be 1000 characters or less.');
+      }
+
+      // Strict MIME type validation
+      const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
+      
       const isVideo = file.type.startsWith('video');
+      const isImage = file.type.startsWith('image');
+
+      if (!isImage && !isVideo) {
+        throw new Error('Invalid file type. Only images and videos are allowed.');
+      }
+      
+      if (isImage && !allowedImageTypes.includes(file.type)) {
+        throw new Error('Invalid image format. Use JPEG, PNG, WEBP, or GIF.');
+      }
+
+      if (isVideo && !allowedVideoTypes.includes(file.type)) {
+        throw new Error('Invalid video format. Use MP4, MOV, or WEBM.');
+      }
+
       const resourceType = isVideo ? 'video' : 'image';
       let fileToUpload = file;
 

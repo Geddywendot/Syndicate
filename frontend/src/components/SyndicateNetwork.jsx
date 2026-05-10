@@ -10,7 +10,8 @@ import {
   MessageSquare,
   Shield,
   Heart,
-  ChevronRight
+  ChevronRight,
+  TrendingUp
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SyndicateAvatar from './SyndicateAvatar';
@@ -25,12 +26,24 @@ const SyndicateNetwork = ({ session }) => {
   const [loading, setLoading] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
 
   useEffect(() => {
     if (session) {
       fetchNetworkData();
     }
+    if (activeSubTab === 'requests') {
+      markNotificationsAsRead();
+    }
   }, [session, activeSubTab]);
+
+  const markNotificationsAsRead = async () => {
+    await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', session.user.id)
+      .eq('type', 'friend_request');
+  };
 
   const fetchNetworkData = async () => {
     setLoading(true);
@@ -57,24 +70,67 @@ const SyndicateNetwork = ({ session }) => {
     setFriends(followsData || []);
     setRequests(requestsData || []);
     setGroups(groupsData || []);
+    
+    // Calculate Suggestions
+    calculateSuggestions(followsData || []);
     setLoading(false);
+  };
+
+  const calculateSuggestions = async (myFriends) => {
+    // 1. Fetch all profiles and all accepted follows
+    const { data: allProfiles, error: pError } = await supabase.from('profiles').select('*').neq('id', session.user.id);
+    const { data: allFollows, error: fError } = await supabase.from('follows').select('*').eq('status', 'accepted');
+
+    if (pError || fError) {
+      console.error('Suggestions Fetch Error:', pError || fError);
+      return;
+    }
+
+    const myFriendIds = new Set(myFriends.map(f => f.following_id));
+    
+    const suggestedUsers = allProfiles
+      .filter(user => !myFriendIds.has(user.id)) // Filter out existing friends
+      .map(user => {
+        // Calculate Mutuals: Friends of mine who also follow this user
+        const mutualFriends = allFollows.filter(f => 
+          f.following_id === user.id && myFriendIds.has(f.follower_id)
+        );
+
+        // Calculate Popularity: Total followers this user has
+        const followerCount = allFollows.filter(f => f.following_id === user.id).length;
+
+        return {
+          ...user,
+          mutualCount: mutualFriends.length,
+          popularity: followerCount,
+          score: (mutualFriends.length * 2) + followerCount // Weighted score
+        };
+      })
+      .filter(user => user.score > 0) // Only suggest if they have some connection
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    setSuggestions(suggestedUsers);
   };
 
   const handleSearch = async (e) => {
     const query = e.target.value;
     setSearchQuery(query);
-    if (query.length < 3) {
+    if (query.length < 1) {
       setSearchResults([]);
       return;
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .ilike('full_name', `%${query}%`)
       .neq('id', session.user.id)
       .limit(5);
     
+    if (error) {
+      console.error('Search Error:', error);
+    }
     setSearchResults(data || []);
   };
 
@@ -166,6 +222,48 @@ const SyndicateNetwork = ({ session }) => {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Suggestions Section */}
+      <AnimatePresence>
+        {suggestions.length > 0 && activeSubTab === 'friends' && searchQuery.length === 0 && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="space-y-4"
+          >
+            <div className="flex items-center justify-between px-2">
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Suggested for you</h3>
+              <TrendingUp size={14} className="text-primary" />
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+              {suggestions.map(user => (
+                <div key={user.id} className="min-w-[180px] bg-white p-6 rounded-[2.5rem] border border-black/[0.03] card-shadow space-y-4 text-center group">
+                  <div className="relative mx-auto w-16 h-16">
+                    <SyndicateAvatar src={user.avatar_url} name={user.full_name} size={64} />
+                    {user.mutualCount > 0 && (
+                      <div className="absolute -top-1 -right-1 bg-primary text-white text-[8px] font-black px-2 py-1 rounded-full border-2 border-white shadow-lg">
+                        {user.mutualCount} MUTUAL
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold truncate">{user.full_name}</p>
+                    <p className="text-[10px] text-text-muted font-medium">
+                      {user.popularity} members connected
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => sendFollowRequest(user.id)}
+                    className="w-full py-3 bg-black text-white text-[10px] font-bold uppercase tracking-widest rounded-xl hover:bg-primary transition-all active:scale-95"
+                  >
+                    Connect
+                  </button>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Sub Tabs */}
       <div className="flex gap-2 p-1 bg-white border border-black/[0.03] rounded-full card-shadow">
