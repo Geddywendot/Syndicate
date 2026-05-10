@@ -139,9 +139,17 @@ const SyndicateNetwork = ({ session }) => {
       .from('follows')
       .insert([{ follower_id: session.user.id, following_id: userId, status: 'pending' }]);
     
-    if (!error) {
-      setSearchResults(prev => prev.filter(u => u.id !== userId));
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation (409 Conflict)
+        alert('You have already sent a request or are already connected to this user.');
+      } else {
+        console.error('Follow request error:', error);
+      }
     }
+    
+    // Always remove from view to clean up UI
+    setSearchResults(prev => prev.filter(u => u.id !== userId));
+    setSuggestions(prev => prev.filter(u => u.id !== userId));
   };
 
   const acceptRequest = async (requestId) => {

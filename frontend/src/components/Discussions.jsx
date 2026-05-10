@@ -237,7 +237,10 @@ const Discussions = ({ session }) => {
         <h3 className="text-xl font-extrabold px-2">Intelligence Reports ({comments.length})</h3>
         
         <form onSubmit={handleAddComment} className="relative group">
+          <label htmlFor="newComment" className="sr-only">Add a comment</label>
           <textarea
+            id="newComment"
+            name="newComment"
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Add to the discussion..."
@@ -310,7 +313,10 @@ const Discussions = ({ session }) => {
                   </div>
                 </div>
 
+                <label htmlFor="discussionTitle" className="sr-only">Thread Title</label>
                 <input 
+                  id="discussionTitle"
+                  name="discussionTitle"
                   type="text"
                   placeholder="Thread Title"
                   value={newDiscussion.title}
@@ -318,7 +324,10 @@ const Discussions = ({ session }) => {
                   className="w-full px-6 py-4 bg-black/[0.03] border border-transparent rounded-2xl outline-none focus:bg-white focus:border-primary/20 transition-all font-bold text-sm"
                 />
 
+                <label htmlFor="discussionContent" className="sr-only">Intel content</label>
                 <textarea 
+                  id="discussionContent"
+                  name="discussionContent"
                   placeholder="Intel content..."
                   value={newDiscussion.content}
                   onChange={(e) => setNewDiscussion({ ...newDiscussion, content: e.target.value })}
